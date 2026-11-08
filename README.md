@@ -7,9 +7,9 @@
 高性能、轻量级 Cloudflare 边缘优选 IP 测速引擎与 AdGuard Home DNS 自动化管理系统。  
 支持 **Docker 容器**、**Docker Compose 编排** 与 **飞牛私有云 (fnOS) 官方原生应用** 跨系统全平台多架构部署。
 
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Docker%20%7C%20fnOS-blue?style=flat-square)](https://github.com)
-[![Architecture](https://img.shields.io/badge/Arch-linux%2Famd64%20%7C%20linux%2Farm64-brightgreen?style=flat-square)](https://github.com)
-[![Docker Image Size](https://img.shields.io/badge/Docker%20Size-14.6MB-blueviolet?style=flat-square)](https://github.com)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Docker%20%7C%20fnOS-blue?style=flat-square)](https://github.com/lonsx/cfip-optimizer)
+[![Architecture](https://img.shields.io/badge/Arch-linux%2Famd64%20%7C%20linux%2Farm64-brightgreen?style=flat-square)](https://github.com/lonsx/cfip-optimizer)
+[![Docker Image Size](https://img.shields.io/badge/Docker%20Size-14.6MB-blueviolet?style=flat-square)](https://github.com/lonsx/cfip-optimizer)
 [![License](https://img.shields.io/badge/License-MIT-orange?style=flat-square)](LICENSE)
 
 </div>
@@ -50,7 +50,7 @@ docker run -d \
   -e TZ=Asia/Shanghai \
   -e CFIP_LISTEN=0.0.0.0:8787 \
   -e CFIP_ALLOWED_CIDRS=0.0.0.0/0,::/0 \
-  ghcr.io/<你的GitHub用户名>/cfip-optimizer:latest
+  ghcr.io/lonsx/cfip-optimizer:latest
 ```
 
 > **说明**：也可以使用桥接网络映射端口（`-p 8787:8787`）。
@@ -87,8 +87,8 @@ docker run -d \
 ```yaml
 services:
   cfip-opt:
-    image: cfip-opt:latest
-    # 若本地有源码，Compose 会直接本地极速构建；若仅有 Compose 文件，可指定线上镜像 ghcr.io/<用户名>/cfip-optimizer:latest
+    image: ghcr.io/lonsx/cfip-optimizer:latest
+    # 若本地有源码，Compose 会直接本地极速构建；若仅有 Compose 文件，会直接拉取上方线上镜像
     build:
       context: .
       dockerfile: Dockerfile

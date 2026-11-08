@@ -1,6 +1,6 @@
 services:
   cfip-opt:
-    image: cfip-opt:latest
+    image: ghcr.io/lonsx/cfip-optimizer:latest
     build:
       context: .
       dockerfile: Dockerfile
