@@ -1,7 +1,7 @@
 # ==========================================
-# 阶段 1: 编译后端静态二进制
+# 阶段 1: 编译后端静态二进制 (支持快速跨架构交叉编译)
 # ==========================================
-FROM golang:1.22-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH
@@ -12,7 +12,7 @@ WORKDIR /build
 COPY go-web/ ./
 
 # 静态多架构编译（内嵌单页 Web 资源）
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} ${TARGETARCH:+GOARCH=${TARGETARCH}} \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /build/cfip-opt ./cmd/cfip-opt
 
 # ==========================================
