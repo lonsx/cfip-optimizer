@@ -153,6 +153,61 @@
     content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
     border:6px solid transparent;border-top-color:#1f2328;
   }
+  /* 右侧顶级 Tab 导航栏 */
+  .rtabs-nav{display:flex;gap:6px;background:#eef2f6;padding:6px;border-radius:10px;
+    border:1px solid var(--line);margin-bottom:2px;flex-wrap:wrap}
+  .rtab{flex:1 1 120px;border:1px solid transparent;background:transparent;border-radius:7px;
+    padding:8px 12px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;
+    color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;
+    transition:all .15s ease;user-select:none}
+  .rtab:hover{color:var(--text);background:rgba(255,255,255,.6)}
+  .rtab.on{background:#fff;color:var(--accent);font-weight:600;border-color:rgba(0,0,0,.06);
+    box-shadow:0 2px 6px rgba(0,0,0,.04)}
+  .rtab-live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);
+    display:inline-block;animation:pulse 1.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+  .rtab-pane{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .rtab-pane.hide{display:none !important}
+
+  /* 历史记录卡片流 */
+  .hist-list{display:flex;flex-direction:column;gap:10px}
+  .hist-card{background:#fbfcfd;border:1px solid var(--line);border-radius:9px;
+    padding:12px 14px;transition:all .15s ease;cursor:pointer}
+  .hist-card:hover{border-color:var(--accent);background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.03)}
+  .hist-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .hist-meta{display:flex;align-items:center;gap:8px;font-size:13px}
+  .hist-time{font-family:var(--mono);font-weight:600;color:var(--text)}
+  .hist-reason{font-size:11px;padding:2px 7px;border-radius:4px;font-weight:500}
+  .hist-reason.manual{background:#e7f3ff;color:#0969da}
+  .hist-reason.guard{background:#dafbe1;color:#1a7f37}
+  .hist-reason.sched{background:#fbefff;color:#8250df}
+  .hist-summary-line{display:flex;align-items:center;gap:12px;margin-top:8px;
+    font-size:12.5px;color:var(--muted);flex-wrap:wrap;line-height:1.5}
+  .hist-summary-line b{color:var(--text);font-family:var(--mono)}
+
+  /* 弹窗模态层 (Modal) */
+  .modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.6);
+    backdrop-filter:blur(4px);z-index:1000;display:none;
+    align-items:center;justify-content:center;padding:20px}
+  .modal-mask.on{display:flex}
+  .modal-box{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 16px 40px rgba(0,0,0,.22);width:100%;max-width:860px;max-height:86vh;
+    display:flex;flex-direction:column;overflow:hidden;animation:popIn .2s ease-out}
+  @keyframes popIn{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal-head{padding:16px 20px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;background:#fbfcfd}
+  .modal-title{font-size:15px;font-weight:600;color:var(--text);margin:0}
+  .modal-sub{font-size:12px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+  .modal-close{background:transparent;border:0;font-size:18px;color:var(--muted);
+    cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1}
+  .modal-close:hover{background:#eef0f4;color:var(--text)}
+  .modal-body{padding:16px 20px;overflow-y:auto;flex:1}
+  .modal-summary{display:flex;align-items:center;gap:12px;margin-bottom:12px;
+    padding:10px 14px;border-radius:8px;background:#f3f9f4;border:1px solid #cfe6d4;
+    font-size:12.5px;color:#1a5d2a;flex-wrap:wrap}
+  .modal-foot{padding:12px 20px;border-top:1px solid var(--line);background:#fbfcfd;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
   .hintline{font-size:11.5px;color:var(--muted);margin:-4px 0 10px}
   /* DNS 区 */
   .dnsrow{display:flex;gap:6px;align-items:center;margin-bottom:6px}
@@ -344,191 +399,249 @@
     </div>
   </section>
 
-  <!-- 右：告警 + 进度 + 结果 -->
-  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
-    <section class="warn" id="netBanner" style="display:none;background:#fdecea;border-color:#f3b6b0;color:#8c1d18">
-      <b>⛔ 本网络存在 TCP 拦截 / 透明代理</b>
-      <div id="netBannerText" style="margin-top:6px"></div>
-    </section>
+  <!-- 右侧内容：重构为 4 大顶级 Tab 页 -->
+  <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <!-- 顶部 4 大 Tab 导航栏 -->
+    <div class="rtabs-nav" id="rtabsNav">
+      <button class="rtab on" data-rtab="live">
+        <span class="rtab-icon">⚡</span> 实时运行状态
+        <span class="rtab-live-dot" id="liveDot" style="display:none"></span>
+      </button>
+      <button class="rtab" data-rtab="automation">
+        <span class="rtab-icon">⏱</span> 定时与守护
+        <span class="chip mini ok" id="rtabAutoChip" style="display:none">运行中</span>
+      </button>
+      <button class="rtab" data-rtab="history">
+        <span class="rtab-icon">📜</span> 测速历史
+        <span class="c-badge" id="rtabHistBadge" style="display:none">0</span>
+      </button>
+      <button class="rtab" data-rtab="dns">
+        <span class="rtab-icon">🔄</span> DNS 重写设置
+        <span class="c-badge" id="rtabDnsBadge">0 实例</span>
+      </button>
+    </div>
 
-    <section class="warn">
-      <b>⚠ 先把风险说清楚</b>
-      <ul>
-        <li><b>多轮会更容被 ban。</b>对同一批 IP 反复建连 / 反复下载，比单轮更接近机器人特征，
-            Cloudflare 边缘或测速源都可能返回 429 / 直接断连。轮次、并发都不是越大越好。</li>
-        <li><b>平均与方差本身更吃资源。</b>请求量 ≈ 候选 IP × 轮次，CPU 与流量同比例上升；
-            在 NAS 这种小内存机器上，并发开太大会把测速变成压力测试。</li>
-        <li><b>建议缩小地区范围。</b>把地区码限定成你真在用的节点（如 <code>HKG,LAX</code>），
-            候选数与探测次数会成倍下降，测量也更稳。</li>
-        <li><b>三种模式都支持多轮采样。</b>TCP / TLS / HTTPing 统一按「每 IP 轮数」
-            采样并计算 σ。<code>httping</code> 早先强制单次是为了省 CF Worker 额度，
-            测速源换成 Cloudflare 官方地址后该限制已取消——单次样本看不出抖动，
-            一个偶然 20ms 的 IP 会被误判成最优。</li>
-        <li><b>httping 是最省事的模式。</b>一次 HEAD 同时拿到延迟、σ 和
-            <code>cf-colo</code> 地区码，地区过滤阶段直接复用，不再额外探测。</li>
-      </ul>
-      <div class="est" id="est">
-        <div><div class="k">延迟探测次数</div><div class="v" id="estProbe">—</div></div>
-        <div><div class="k">地区补探测</div><div class="v" id="estGate">—</div></div>
-        <div><div class="k">下载测速量</div><div class="v" id="estDl">—</div></div>
-        <div><div class="k">预计耗时</div><div class="v" id="estTime">—</div></div>
-      </div>
-    </section>
+    <!-- 1. 实时运行状态 Tab -->
+    <div class="rtab-pane" id="rtabPaneLive">
+      <section class="warn" id="netBanner" style="display:none;background:#fdecea;border-color:#f3b6b0;color:#8c1d18">
+        <b>⛔ 本网络存在 TCP 拦截 / 透明代理</b>
+        <div id="netBannerText" style="margin-top:6px"></div>
+      </section>
 
-    <section class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <h2 style="margin:0">运行状态</h2>
-        <div style="display:flex;align-items:center;gap:10px">
-          <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none">
-            <input type="checkbox" id="logAutoScroll" checked style="margin:0"> 自动滚动
+      <section class="warn">
+        <b>⚠ 先把风险说清楚</b>
+        <ul>
+          <li><b>多轮会更容被 ban。</b>对同一批 IP 反复建连 / 反复下载，比单轮更接近机器人特征，
+              Cloudflare 边缘或测速源都可能返回 429 / 直接断连。轮次、并发都不是越大越好。</li>
+          <li><b>建议缩小地区范围。</b>把地区码限定成你真在用的节点（如 <code>HKG,LAX</code>），
+              候选数与探测次数会成倍下降，测量也更稳。</li>
+        </ul>
+        <div class="est" id="est">
+          <div><div class="k">延迟探测次数</div><div class="v" id="estProbe">—</div></div>
+          <div><div class="k">地区补探测</div><div class="v" id="estGate">—</div></div>
+          <div><div class="k">下载测速量</div><div class="v" id="estDl">—</div></div>
+          <div><div class="k">预计耗时</div><div class="v" id="estTime">—</div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <h2 style="margin:0">实时输出</h2>
+          <div style="display:flex;align-items:center;gap:10px">
+            <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none">
+              <input type="checkbox" id="logAutoScroll" checked style="margin:0"> 自动滚动
+            </label>
+            <button class="btn ghost mini" id="btnClearLog" type="button" style="padding:2px 8px;font-size:11.5px">清屏</button>
+          </div>
+        </div>
+        <div class="progress">
+          <div class="bar"><i id="bar"></i></div>
+          <div class="ptxt"><span id="pLabel">空闲</span><span id="pCount"></span></div>
+        </div>
+        <div class="logs-box" id="logsBox" style="margin-top:10px">
+          <div id="logsList">等待开始…</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div class="tabs" style="margin:0">
+            <button data-tab="table" class="on">当前结果表格</button>
+            <button data-tab="text">纯文本模式</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <button class="btn ghost" id="btnCopy" style="padding:5px 11px;font-size:12.5px">复制文本</button>
+          <button class="btn ghost" id="btnCsv" style="padding:5px 11px;font-size:12.5px">导出 CSV</button>
+        </div>
+        <div id="paneTable">
+          <div class="winner" id="winnerLine" style="display:none"></div>
+          <div class="empty" id="tblEmpty">还没有结果，点左侧「开始测速」。</div>
+          <table id="tbl" style="display:none">
+            <thead><tr>
+              <th data-k="_i" class="num">#</th>
+              <th data-k="ip">IP</th>
+              <th data-k="_fam">族</th>
+              <th data-k="colo">地区</th>
+              <th data-k="delay_ms" class="num">延迟</th>
+              <th data-k="delay_sigma" class="num">σ</th>
+              <th data-k="_dn" class="num">轮</th>
+              <th data-k="speed_kbps" class="num">下载</th>
+              <th data-k="speed_sigma" class="num">σ</th>
+              <th data-k="_sn" class="num">轮</th>
+              <th data-k="_tag">备注</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="paneText" style="display:none">
+          <pre id="txt">—</pre>
+        </div>
+      </section>
+    </div>
+
+    <!-- 2. 定时与守护设置 Tab -->
+    <div class="rtab-pane hide" id="rtabPaneAutomation">
+      <section class="card" id="schedCard">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <h2 style="margin:0">定时测速任务</h2>
+          <span class="chip" id="schedChip">—</span>
+        </div>
+        <div class="row">
+          <label class="f"><span>自动测速间隔（分钟，0 = 关闭）</span>
+            <input type="number" id="interval_minutes" min="0" max="10080" step="1"></label>
+          <label class="f"><span>启动后立即测速</span>
+            <select id="run_on_start">
+              <option value="1">开启</option>
+              <option value="0">关闭</option>
+            </select></label>
+        </div>
+        <div class="est" style="margin-bottom:10px">
+          <div><div class="k">上次定时触发</div><div class="v" id="sLast">—</div></div>
+          <div><div class="k">下次预计触发</div><div class="v" id="sNext">—</div></div>
+        </div>
+        <div class="hint" style="font-size:12px;opacity:.75;line-height:1.7">
+          定时任务负责「定期找更快的 IP」，可达性守护负责「当前 IP 挂了马上换」。修改后在左侧点击「仅保存」即可保存生效。
+        </div>
+      </section>
+
+      <section class="card" id="guardCard">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <h2 style="margin:0">可达性守护</h2>
+          <span class="chip" id="guardChip">—</span>
+          <div class="spacer" style="flex:1"></div>
+          <button class="btn ghost" id="btnGuardProbe" type="button" style="padding:5px 11px;font-size:12.5px">立即探测</button>
+        </div>
+        <div class="est" style="margin-bottom:10px">
+          <div><div class="k">守护目标</div><div class="v" id="gIp">—</div></div>
+          <div><div class="k">当前延迟</div><div class="v" id="gRtt">—</div></div>
+          <div><div class="k">连续失败</div><div class="v" id="gFails">—</div></div>
+          <div><div class="k">下次检查</div><div class="v" id="gNext">—</div></div>
+        </div>
+        <div class="row">
+          <label class="f"><span>守护检查间隔（秒）</span>
+            <input type="number" id="gw_interval" min="15" max="3600" step="15" placeholder="60">
           </label>
-          <button class="btn ghost mini" id="btnClearLog" type="button" style="padding:2px 8px;font-size:11.5px">清屏</button>
+          <label class="f"><span>故障快速轮换</span>
+            <select id="gw_failover">
+              <option value="1">开启（先从结果表切备选）</option>
+              <option value="0">关闭（挂了直接整轮重测）</option>
+            </select></label>
         </div>
-      </div>
-      <div class="progress">
-        <div class="bar"><i id="bar"></i></div>
-        <div class="ptxt"><span id="pLabel">空闲</span><span id="pCount"></span></div>
-      </div>
-
-      <!-- 日志模块标签切换 -->
-      <div class="log-tabs" id="logTabs">
-        <button class="log-tab on" data-mod="all">全部 <span class="c-badge" id="cAll">0</span></button>
-        <button class="log-tab" data-mod="speed">⏱ 测速流水线 <span class="c-badge" id="cSpeed">0</span></button>
-        <button class="log-tab" data-mod="guard">🛡 可达性守护 <span class="c-badge" id="cGuard">0</span></button>
-        <button class="log-tab" data-mod="dns">🔄 DNS同步 <span class="c-badge" id="cDns">0</span></button>
-        <button class="log-tab" data-mod="warn">⚠️ 告警/系统 <span class="c-badge" id="cWarn">0</span></button>
-      </div>
-      <div class="logs-box" id="logsBox">
-        <div id="logsList">等待开始…</div>
-      </div>
-    </section>
-
-    <section class="card" id="schedCard">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <h2 style="margin:0">定时任务</h2>
-        <span class="chip" id="schedChip">—</span>
-      </div>
-      <div class="row">
-        <label class="f"><span>自动测速间隔（分钟，0 = 关闭）</span>
-          <input type="number" id="interval_minutes" min="0" max="10080" step="1"></label>
-        <label class="f"><span>启动后立即测速</span>
-          <select id="run_on_start">
-            <option value="1">开启</option>
-            <option value="0">关闭</option>
-          </select></label>
-      </div>
-      <div class="est" style="margin-bottom:10px">
-        <div><div class="k">上次定时触发</div><div class="v" id="sLast">—</div></div>
-        <div><div class="k">下次触发</div><div class="v" id="sNext">—</div></div>
-      </div>
-      <div class="hint" style="font-size:12px;opacity:.75;line-height:1.7">
-        定时任务负责「定期找更快的 IP」，可达性守护负责「当前 IP 挂了马上换」。
-        两者互补：只有定时，IP 挂了要等下一周期；只有守护，网络变好了也不会主动换更快线路。
-      </div>
-    </section>
-
-    <section class="card" id="guardCard">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <h2 style="margin:0">可达性守护</h2>
-        <span class="chip" id="guardChip">—</span>
-        <div class="spacer" style="flex:1"></div>
-        <button class="btn ghost" id="btnGuardProbe" type="button" style="padding:5px 11px;font-size:12.5px">立即探测</button>
-      </div>
-      <div class="est" style="margin-bottom:10px">
-        <div><div class="k">守护目标</div><div class="v" id="gIp">—</div></div>
-        <div><div class="k">当前延迟</div><div class="v" id="gRtt">—</div></div>
-        <div><div class="k">连续失败</div><div class="v" id="gFails">—</div></div>
-        <div><div class="k">下次检查</div><div class="v" id="gNext">—</div></div>
-      </div>
-      <div class="row">
-        <label class="f"><span>守护检查间隔（秒）</span>
-          <input type="number" id="gw_interval" min="15" max="3600" step="15" placeholder="60">
-        </label>
-        <label class="f"><span>故障快速轮换</span>
-          <select id="gw_failover">
-            <option value="1">开启（先从结果表切备选）</option>
-            <option value="0">关闭（挂了直接整轮重测）</option>
-          </select></label>
-      </div>
-      <div class="hintline" style="margin-top:-4px">
-        默认 60 秒检查一次当前写入 DNS 的 IP。若觉得频繁，推荐设为 120 ~ 300 秒（2 ~ 5 分钟）。修改后在左侧点「仅保存」即可立即生效。
-      </div>
-      <div class="hint" id="gText" style="font-size:12px;opacity:.75;line-height:1.7;margin-top:6px"></div>
-    </section>
-
-    <section class="card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-        <div class="tabs" style="margin:0">
-          <button data-tab="table" class="on">当前结果</button>
-          <button data-tab="text">文本模式</button>
-          <button data-tab="history">📜 历史测速记录 <span id="histCountBadge" class="c-badge" style="display:none">0</span></button>
+        <div class="hintline" style="margin-top:-4px">
+          默认 60 秒检查一次当前写入 DNS 的 IP。若觉得频繁，推荐设为 120 ~ 300 秒（2 ~ 5 分钟）。
         </div>
-        <div class="spacer" style="flex:1"></div>
-        <button class="btn ghost" id="btnCopy" style="padding:5px 11px;font-size:12.5px">复制文本</button>
-        <button class="btn ghost" id="btnCsv" style="padding:5px 11px;font-size:12.5px">导出 CSV</button>
+        <div class="hint" id="gText" style="font-size:12px;opacity:.75;line-height:1.7;margin-top:6px"></div>
+      </section>
+    </div>
+
+    <!-- 3. 所有测速历史 Tab -->
+    <div class="rtab-pane hide" id="rtabPaneHistory">
+      <section class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div>
+            <h2 style="margin:0">测速历史记录</h2>
+            <div style="font-size:12px;color:var(--muted);margin-top:3px">自动归档最近 30 次测速。点击任意卡片可弹出查看当次测速的完整明细表格</div>
+          </div>
+          <button class="btn ghost mini danger" id="btnClearHistory" type="button" style="padding:4px 10px;font-size:12px">清空所有历史</button>
+        </div>
+        <div class="empty" id="histEmpty" style="display:none">暂无历史测速记录，跑一次测速后会自动在此归档。</div>
+        <div class="hist-list" id="histList"></div>
+      </section>
+    </div>
+
+    <!-- 4. DNS 重写设置 Tab -->
+    <div class="rtab-pane hide" id="rtabPaneDns">
+      <section class="card">
+        <h2>DNS 重写同步设置</h2>
+        <div class="hintline" style="margin-top:-6px">测速完成后自动把最优 IP 写入下方实例的 DNS 重写表（整表接管：期望之外的记录会被清理）。</div>
+        <label class="cb"><input type="checkbox" id="dns_auto">
+          <span>测速完成后自动写入<span class="hint">取「实测下载带宽最大」的那一个；全部无测速数据时退化为延迟最低</span></span></label>
+
+        <div class="subh">DNS 实例（AdGuard Home）</div>
+        <div id="dnsInsts"></div>
+        <button class="btn ghost mini" id="dnsAddInst">＋ 添加实例</button>
+
+        <div class="subh">要写入的域名</div>
+        <div id="dnsDomains"></div>
+        <button class="btn ghost mini" id="dnsAddDom">＋ 添加域名</button>
+
+        <div class="subh">手动重写（随最优 IP 一并下发到所有实例）</div>
+        <div id="dnsManual"></div>
+        <button class="btn ghost mini" id="dnsAddManual">＋ 添加手动重写</button>
+
+        <div class="actions">
+          <button class="btn ghost" id="dnsSave" style="flex:0 0 auto">保存 DNS 配置</button>
+          <button class="btn ghost" id="dnsSyncNow" style="flex:0 0 auto">立即写入</button>
+          <button class="btn ghost" id="dnsView" style="flex:0 0 auto">查看实例重写表</button>
+        </div>
+        <div class="dnsstat" id="dnsStat" style="display:none"></div>
+        <div class="rwbox" id="rwBox" style="display:none"><pre id="rwPre"></pre></div>
+      </section>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<!-- 测速历史结果明细弹窗 (Modal) -->
+<div class="modal-mask" id="histModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h3 class="modal-title" id="mTitle">测速结果明细</h3>
+        <div class="modal-sub" id="mSub">—</div>
       </div>
-      <div id="paneTable">
-        <div class="winner" id="winnerLine" style="display:none"></div>
-        <div class="empty" id="tblEmpty">还没有结果，点「开始测速」。</div>
-        <table id="tbl" style="display:none">
+      <button class="modal-close" id="mClose" title="关闭 (Esc)">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-summary" id="mSummary"></div>
+      <div style="overflow-x:auto">
+        <table id="mTbl">
           <thead><tr>
-            <th data-k="_i" class="num">#</th>
-            <th data-k="ip">IP</th>
-            <th data-k="_fam">族</th>
-            <th data-k="colo">地区</th>
-            <th data-k="delay_ms" class="num">延迟</th>
-            <th data-k="delay_sigma" class="num">σ</th>
-            <th data-k="_dn" class="num">轮</th>
-            <th data-k="speed_kbps" class="num">下载</th>
-            <th data-k="speed_sigma" class="num">σ</th>
-            <th data-k="_sn" class="num">轮</th>
-            <th data-k="_tag">备注</th>
+            <th class="num">#</th>
+            <th>IP</th>
+            <th>族</th>
+            <th>地区</th>
+            <th class="num">延迟</th>
+            <th class="num">σ</th>
+            <th class="num">轮</th>
+            <th class="num">下载</th>
+            <th class="num">σ</th>
+            <th class="num">轮</th>
+            <th>备注</th>
           </tr></thead>
           <tbody></tbody>
         </table>
       </div>
-      <div id="paneText" style="display:none">
-        <pre id="txt">—</pre>
-      </div>
-      <div id="paneHistory" style="display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:12.5px;color:var(--muted)">自动保留最近 30 次测速记录（含测试时间、触发类型、最优节点与完整测速结果）</div>
-          <button class="btn ghost mini danger" id="btnClearHistory" type="button" style="padding:3px 8px;font-size:11.5px">清空历史</button>
-        </div>
-        <div class="empty" id="histEmpty" style="display:none">暂无历史测速记录</div>
-        <div class="hist-list" id="histList"></div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>DNS 重写同步</h2>
-      <div class="hintline" style="margin-top:-6px">测速完成后自动把最优 IP 写入下方实例的 DNS 重写表（整表接管：期望之外的记录会被清理）。</div>
-      <label class="cb"><input type="checkbox" id="dns_auto">
-        <span>测速完成后自动写入<span class="hint">取「实测下载带宽最大」的那一个（IPv4/IPv6 同台比较，谁快用谁）；全部无测速数据时退化为延迟最低</span></span></label>
-
-      <div class="subh">DNS 实例（AdGuard Home）</div>
-      <div id="dnsInsts"></div>
-      <button class="btn ghost mini" id="dnsAddInst">＋ 添加实例</button>
-
-      <div class="subh">要写入的域名</div>
-      <div id="dnsDomains"></div>
-      <button class="btn ghost mini" id="dnsAddDom">＋ 添加域名</button>
-
-      <div class="subh">手动重写（随最优 IP 一并下发到所有实例）</div>
-      <div id="dnsManual"></div>
-      <button class="btn ghost mini" id="dnsAddManual">＋ 添加手动重写</button>
-
-      <div class="actions">
-        <button class="btn ghost" id="dnsSave" style="flex:0 0 auto">保存 DNS 配置</button>
-        <button class="btn ghost" id="dnsSyncNow" style="flex:0 0 auto">立即写入</button>
-        <button class="btn ghost" id="dnsView" style="flex:0 0 auto">查看实例重写表</button>
-      </div>
-      <div class="dnsstat" id="dnsStat" style="display:none"></div>
-      <div class="rwbox" id="rwBox" style="display:none"><pre id="rwPre"></pre></div>
-    </section>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost mini" id="mBtnCopy">复制文本</button>
+      <button class="btn ghost mini" id="mBtnCsv">导出本轮 CSV</button>
+      <div class="spacer" style="flex:1"></div>
+      <button class="btn primary mini" id="mBtnApplyDns" style="display:none">写入此最优 IP 到 DNS</button>
+      <button class="btn ghost mini" id="mBtnClose">关闭</button>
+    </div>
   </div>
-</main>
-<div class="toast" id="toast"></div>
+</div>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -618,6 +731,24 @@ function renderLogs(logs){
   }
 }
 
+let CURRENT_RTAB = "live";
+let WAS_RUNNING = false;
+let CURRENT_MODAL_ITEM = null;
+
+function switchRightTab(tabKey){
+  CURRENT_RTAB = tabKey;
+  document.querySelectorAll("#rtabsNav .rtab").forEach(b => {
+    b.classList.toggle("on", b.dataset.rtab === tabKey);
+  });
+  $("rtabPaneLive").classList.toggle("hide", tabKey !== "live");
+  $("rtabPaneAutomation").classList.toggle("hide", tabKey !== "automation");
+  $("rtabPaneHistory").classList.toggle("hide", tabKey !== "history");
+  $("rtabPaneDns").classList.toggle("hide", tabKey !== "dns");
+
+  if(tabKey === "history") loadHistory();
+  if(tabKey === "dns") loadDns();
+}
+
 async function loadHistory(){
   try{
     const res = await api("/api/history");
@@ -631,7 +762,7 @@ async function loadHistory(){
 function renderHistory(){
   const list = $("histList");
   const empty = $("histEmpty");
-  const badge = $("histCountBadge");
+  const badge = $("rtabHistBadge");
   if(badge){
     badge.textContent = HISTORY_DATA.length;
     badge.style.display = HISTORY_DATA.length ? "inline-block" : "none";
@@ -644,8 +775,7 @@ function renderHistory(){
   }
   if(empty) empty.style.display = "none";
 
-  list.innerHTML = HISTORY_DATA.map((h)=>{
-    const isExp = EXPANDED_HIST.has(h.id);
+  list.innerHTML = HISTORY_DATA.map((h, idx)=>{
     let rCls = "manual";
     if(h.reason.includes("守护")) rCls = "guard";
     else if(h.reason.includes("定时")) rCls = "sched";
@@ -654,78 +784,117 @@ function renderHistory(){
     const bestDelay = h.best_delay ? (h.best_delay.toFixed(1) + " ms") : "—";
     const bestColo = h.best_colo || "—";
 
-    let tableHtml = "";
-    if(isExp && h.results && h.results.length){
-      tableHtml = `<div class="hist-table on">
-        <table>
-          <thead><tr>
-            <th>#</th>
-            <th>IP</th>
-            <th>族</th>
-            <th>地区</th>
-            <th class="num">延迟</th>
-            <th class="num">σ</th>
-            <th class="num">下载</th>
-            <th class="num">σ</th>
-          </tr></thead>
-          <tbody>
-            ${h.results.map((r, i)=>`<tr>
-              <td>${i+1}</td>
-              <td class="ip">${r.ip}</td>
-              <td><span class="fam ${r._fam}">${r._fam}</span></td>
-              <td>${r.colo || "—"}</td>
-              <td class="num">${fmt(r.delay_ms, 1)}<span class="muted"> ms</span></td>
-              <td class="num">${sigma(r.delay_sigma)}</td>
-              <td class="num">${fmtInt(r.speed_kbps)}</td>
-              <td class="num">${sigma(r.speed_sigma)}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>
-      </div>`;
-    }
-
-    return `<div class="hist-item" data-id="${h.id}">
-      <div class="hist-head">
+    return `<div class="hist-card" data-idx="${idx}">
+      <div class="hist-card-head">
         <div class="hist-meta">
           <span class="hist-time">📅 ${h.time}</span>
           <span class="hist-reason ${rCls}">${escapeHtml(h.reason)}</span>
-          <span style="font-size:11px;color:var(--muted)">耗时 ${h.duration_s}s · ${h.count} 个候选</span>
+          <span style="font-size:11.5px;color:var(--muted)">耗时 ${h.duration_s}s</span>
         </div>
-        <div style="display:flex;gap:6px">
-          ${h.best_ip ? `<button class="btn ghost mini btn-apply-ip" data-ip="${h.best_ip}" type="button" style="padding:2px 8px;font-size:11px">写入此IP</button>` : ""}
-          <button class="btn ghost mini btn-toggle-hist" data-id="${h.id}" type="button" style="padding:2px 8px;font-size:11px">
-            ${isExp ? "收起详情 ▲" : "详情表格 ▼"}
-          </button>
-        </div>
+        <button class="btn primary mini btn-view-hist" data-idx="${idx}" type="button" style="padding:3px 10px;font-size:11.5px">查看结果明细 ↗</button>
       </div>
-      <div class="hist-summary">
-        <div>最优 IP：<b style="font-family:var(--mono);color:var(--text)">${h.best_ip || "—"}</b></div>
+      <div class="hist-summary-line">
+        <div>最优节点：<b>${h.best_ip || "—"}</b></div>
         <div>地区：<b>${bestColo}</b></div>
-        <div>延迟：<b>${bestDelay}</b></div>
-        <div>下载速度：<b>${bestSpeed}</b></div>
+        <div>平均延迟：<b>${bestDelay}</b></div>
+        <div>实测下载：<b>${bestSpeed}</b></div>
+        <div>优选 IP 数：<b>${h.count || (h.results ? h.results.length : 0)} 个</b></div>
       </div>
-      ${tableHtml}
     </div>`;
   }).join("");
 
-  list.querySelectorAll(".btn-toggle-hist").forEach(btn=>{
-    btn.onclick = ()=>{
-      const id = btn.getAttribute("data-id");
-      if(EXPANDED_HIST.has(id)) EXPANDED_HIST.delete(id);
-      else EXPANDED_HIST.add(id);
-      renderHistory();
+  list.querySelectorAll(".hist-card").forEach(card=>{
+    card.onclick = (e)=>{
+      const idx = +card.getAttribute("data-idx");
+      if(HISTORY_DATA[idx]) openHistModal(HISTORY_DATA[idx]);
     };
   });
-  list.querySelectorAll(".btn-apply-ip").forEach(btn=>{
-    btn.onclick = async ()=>{
-      const ip = btn.getAttribute("data-ip");
-      if(!confirm(`确定将历史测速的最优 IP [${ip}] 立即写入 AdGuard Home 吗？`)) return;
+}
+
+function openHistModal(h){
+  CURRENT_MODAL_ITEM = h;
+  const modal = $("histModal");
+  $("mTitle").textContent = "测速结果明细 · " + (h.time || "");
+  $("mSub").textContent = `触发原因：${h.reason || "手动"} · 测速耗时：${h.duration_s || 0} 秒 · 候选优选节点：${h.count || (h.results ? h.results.length : 0)} 个`;
+
+  const bestSpeed = h.best_speed ? fmtInt(h.best_speed) : "—";
+  const bestDelay = h.best_delay ? (h.best_delay.toFixed(1) + " ms") : "—";
+  const bestColo = h.best_colo || "—";
+
+  $("mSummary").innerHTML = `
+    <div>写入 DNS 的最优 IP：<b style="font-family:var(--mono);color:#1a5d2a">${h.best_ip || "—"}</b></div>
+    <div>所属地区：<b>${bestColo}</b></div>
+    <div>平均延迟：<b>${bestDelay}</b></div>
+    <div>下载带宽：<b>${bestSpeed}</b></div>
+  `;
+
+  const rows = h.results || [];
+  const best = bestRow(rows);
+  const tb = document.querySelector("#mTbl tbody");
+  tb.innerHTML = rows.map((r, idx)=>{
+    const isBest = best && r.ip === best.ip;
+    let tag = isBest ? '<span class="tag best">最优</span>' : '';
+    return `<tr class="${isBest ? 'best' : ''}">
+      <td class="num">${idx + 1}</td>
+      <td class="ip">${r.ip}</td>
+      <td><span class="fam ${r._fam}">${r._fam}</span></td>
+      <td>${r.colo || "—"}</td>
+      <td class="num">${fmt(r.delay_ms, 1)}<span class="muted"> ms</span></td>
+      <td class="num">${sigma(r.delay_sigma)}</td>
+      <td class="num">${r.delay_ok||0}/${r.delay_rounds||0}</td>
+      <td class="num">${fmtInt(r.speed_kbps)}</td>
+      <td class="num">${sigma(r.speed_sigma)}</td>
+      <td class="num">${r.speed_ok||0}/${r.speed_rounds||0}</td>
+      <td>${tag}</td>
+    </tr>`;
+  }).join("");
+
+  const btnApply = $("mBtnApplyDns");
+  if(h.best_ip){
+    btnApply.style.display = "";
+    btnApply.textContent = `写入 ${h.best_ip} 到 DNS`;
+    btnApply.onclick = async ()=>{
+      if(!confirm(`确定将该次测速的最优 IP [${h.best_ip}] 立即写入 AdGuard Home 吗？`)) return;
       try{
         await api("/api/dns/sync", {method:"POST", body:"{}"});
-        toast("✓ 已将最优 IP 写入 DNS: " + ip, btn);
-      }catch(e){ toast(e.message, btn); }
+        toast("✓ 已将最优 IP 写入 DNS: " + h.best_ip);
+      }catch(e){ toast(e.message); }
     };
-  });
+  } else {
+    btnApply.style.display = "none";
+  }
+
+  $("mBtnCopy").onclick = async ()=>{
+    const txt = rows.map(textLine).join("\n") || "—";
+    try{ await navigator.clipboard.writeText(txt); toast("✓ 已复制该轮明细到剪贴板"); }catch(e){ toast("复制失败"); }
+  };
+  $("mBtnCsv").onclick = ()=>{
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(formatResultsCSV(rows));
+    const a = document.createElement("a");
+    a.href = csvContent;
+    a.download = `cfip-history-${h.id}.csv`;
+    a.click();
+  };
+
+  modal.classList.add("on");
+}
+
+function closeHistModal(){
+  const modal = $("histModal");
+  if(modal) modal.classList.remove("on");
+  CURRENT_MODAL_ITEM = null;
+}
+
+function formatResultsCSV(rows){
+  const lines = ["IP,族,地区,延迟(ms),延迟方差,延迟有效轮数,下载(KB/s),下载方差,下载有效轮数"];
+  for(const r of rows){
+    lines.push([
+      r.ip, r._fam, r.colo||"",
+      r.delay_ms!=null?r.delay_ms:"", r.delay_sigma!=null?r.delay_sigma:"", (r.delay_ok||0)+"/"+(r.delay_rounds||0),
+      r.speed_kbps!=null?r.speed_kbps:"", r.speed_sigma!=null?r.speed_sigma:"", (r.speed_ok||0)+"/"+(r.speed_rounds||0)
+    ].join(","));
+  }
+  return lines.join("\n");
 }
 
 // 统一网关前缀适配：当页面运行在 /app/cfip-opt/ 子路径时，API 自动补齐前缀
@@ -1294,13 +1463,32 @@ async function poll(){
     $("pLabel").textContent = [p.label || "空闲", p.detail || ""].filter(Boolean).join(" · ");
     $("pCount").textContent = p.total ? (p.done + " / " + p.total) : "";
     renderLogs(st.log || []);
-    if(st.history_count != null){
-      const badge = $("histCountBadge");
-      if(badge){
-        badge.textContent = st.history_count;
-        badge.style.display = st.history_count ? "inline-block" : "none";
-      }
+    if(st.running && !WAS_RUNNING){
+      switchRightTab("live");
     }
+    WAS_RUNNING = !!st.running;
+
+    const dot = $("liveDot");
+    if(dot) dot.style.display = st.running ? "inline-block" : "none";
+
+    const autoChip = $("rtabAutoChip");
+    if(autoChip){
+      const autoOn = (st.sched && st.sched.enabled) || (st.guard && st.guard.enabled);
+      autoChip.style.display = autoOn ? "inline-block" : "none";
+    }
+
+    const hBadge = $("rtabHistBadge");
+    if(hBadge && st.history_count != null){
+      hBadge.textContent = st.history_count;
+      hBadge.style.display = st.history_count ? "inline-block" : "none";
+    }
+
+    const dnsBadge = $("rtabDnsBadge");
+    if(dnsBadge && st.dns_state && st.dns_state.instances){
+      const num = Object.keys(st.dns_state.instances).length;
+      dnsBadge.textContent = num ? `${num} 个实例` : "未配置";
+    }
+
     $("btnRun").disabled = st.running;
     $("btnRun").textContent = st.running ? "运行中…" : "开始测速";
     $("btnCancel").style.display = st.running ? "" : "none";
@@ -1345,6 +1533,21 @@ async function poll(){
 }
 
 /* ---------- 事件 ---------- */
+// 右侧 4 大顶级 Tab 切换
+document.querySelectorAll("#rtabsNav .rtab").forEach(b=>{
+  b.onclick = ()=> switchRightTab(b.dataset.rtab);
+});
+
+// 模态弹窗关闭交互
+$("mClose").onclick = closeHistModal;
+$("mBtnClose").onclick = closeHistModal;
+$("histModal").onclick = (e)=>{
+  if(e.target === $("histModal")) closeHistModal();
+};
+document.addEventListener("keydown", (e)=>{
+  if(e.key === "Escape") closeHistModal();
+});
+
 document.querySelectorAll("#modeSeg button").forEach(b=>{
   b.onclick = ()=>{ document.querySelectorAll("#modeSeg button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); refreshMode(); refreshEstimate(); };
@@ -1354,10 +1557,8 @@ document.querySelectorAll(".tabs button").forEach(b=>{
     b.classList.add("on"); TAB = b.dataset.tab;
     $("paneTable").style.display = TAB === "table" ? "" : "none";
     $("paneText").style.display = TAB === "text" ? "" : "none";
-    $("paneHistory").style.display = TAB === "history" ? "" : "none";
     $("btnCopy").style.display = TAB === "text" ? "" : "none";
     $("btnCsv").style.display = TAB === "table" ? "" : "none";
-    if(TAB === "history") loadHistory();
   };
 });
 
@@ -1377,11 +1578,11 @@ $("btnClearHistory").onclick = async ()=>{
   try{
     await api("/api/history/clear", {method:"POST", body:"{}"});
     HISTORY_DATA = [];
-    EXPANDED_HIST.clear();
     renderHistory();
     toast("✓ 测速历史已清空");
   }catch(e){ toast(e.message); }
 };
+
 document.querySelectorAll("#tbl th").forEach(th=>{
   th.onclick = ()=>{
     const k = th.dataset.k;
@@ -1394,6 +1595,7 @@ document.querySelectorAll("#tbl th").forEach(th=>{
   .forEach(id => { const el = $(id); if(el) el.addEventListener("change", refreshEstimate); });
 
 $("btnRun").onclick = async ()=>{
+  switchRightTab("live");
   const btn = $("btnRun");
   try{
     await api("/api/run", {method:"POST", body: JSON.stringify(collect())});
