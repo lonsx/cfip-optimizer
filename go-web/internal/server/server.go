@@ -34,9 +34,24 @@ var CommonColos = [][2]string{
 }
 
 const (
-	maxLog    = 400
-	guardHist = 60
+	maxLog     = 400
+	guardHist  = 60
+	maxHistory = 30
 )
+
+// HistoryItem 每次测速的持久化归档记录。
+type HistoryItem struct {
+	ID        string           `json:"id"`
+	Time      string           `json:"time"`
+	Reason    string           `json:"reason"`
+	DurationS float64          `json:"duration_s"`
+	Count     int              `json:"count"`
+	BestIP    string           `json:"best_ip"`
+	BestColo  string           `json:"best_colo"`
+	BestDelay float64          `json:"best_delay"`
+	BestSpeed float64          `json:"best_speed"`
+	Results   []*engine.Result `json:"results,omitempty"`
+}
 
 // ---------------------------------------------------------------- 守护状态
 
@@ -94,6 +109,7 @@ type App struct {
 	IPv6Info map[string]any
 	DNSState DNSState
 	Guard    GuardState
+	History  []HistoryItem
 
 	runner    *engine.Runner
 	guardStop chan struct{}
@@ -169,8 +185,9 @@ type Snapshot struct {
 	NetCheck    engine.NetCheck   `json:"netcheck"`
 	IPv6Info    map[string]any    `json:"ipv6_info"`
 	DNSState    DNSState          `json:"dns_state"`
-	Guard       GuardState        `json:"guard"`
-	Sched       SchedInfo         `json:"sched"`
+	Guard        GuardState        `json:"guard"`
+	Sched        SchedInfo         `json:"sched"`
+	HistoryCount int               `json:"history_count"`
 }
 
 func (a *App) snapshot(cfg engine.Config) Snapshot {
@@ -179,6 +196,7 @@ func (a *App) snapshot(cfg engine.Config) Snapshot {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	hCount := len(a.History)
 	start := len(a.Logs) - 120
 	if start < 0 {
 		start = 0
@@ -191,18 +209,19 @@ func (a *App) snapshot(cfg engine.Config) Snapshot {
 	guard := a.Guard
 	guard.History = append([]GuardTick{}, a.Guard.History...)
 	return Snapshot{
-		Running:    a.Running,
-		Progress:   a.Progress,
-		Log:        logs,
-		Results:    results,
-		Error:      a.Error,
-		StartedAt:  a.StartedAt,
-		FinishedAt: a.FinishedAt,
-		NetCheck:   a.NetCheck,
-		IPv6Info:   a.IPv6Info,
-		DNSState:   a.DNSState,
-		Guard:      guard,
-		Sched:      sched,
+		Running:      a.Running,
+		Progress:     a.Progress,
+		Log:          logs,
+		Results:      results,
+		Error:        a.Error,
+		StartedAt:    a.StartedAt,
+		FinishedAt:   a.FinishedAt,
+		NetCheck:     a.NetCheck,
+		IPv6Info:     a.IPv6Info,
+		DNSState:     a.DNSState,
+		Guard:        guard,
+		Sched:        sched,
+		HistoryCount: hCount,
 		CfgSnapshot: map[string]any{
 			"mode":           cfg.Mode,
 			"latency_rounds": cfg.LatencyRounds,
@@ -217,6 +236,7 @@ func (a *App) snapshot(cfg engine.Config) Snapshot {
 
 // runTask 跑一轮完整测速。
 func (a *App) runTask(cfg engine.Config, reason string) {
+	t0 := time.Now()
 	a.mu.Lock()
 	if a.Running {
 		a.mu.Unlock()
@@ -287,12 +307,72 @@ func (a *App) runTask(cfg engine.Config, reason string) {
 	auto := cfg.DNS.AutoSync
 	a.mu.Unlock()
 
+	dur := time.Since(t0).Seconds()
 	a.persistLast(results)
+	a.recordHistory(reason, dur, results)
 
 	if auto && len(results) > 0 {
 		if best := engine.Best(results); best != nil {
 			a.doSync(cfg, best.IP, true)
 		}
+	}
+}
+
+func (a *App) recordHistory(reason string, dur float64, results []*engine.Result) {
+	now := time.Now()
+	item := HistoryItem{
+		ID:        now.Format("20060102150405"),
+		Time:      now.Format("2006-01-02 15:04:05"),
+		Reason:    reason,
+		DurationS: float64(int64(dur*10+0.5)) / 10,
+		Count:     len(results),
+		Results:   results,
+	}
+	if best := engine.Best(results); best != nil {
+		item.BestIP = best.IP
+		item.BestColo = best.Colo
+		if best.DelayMS != nil {
+			item.BestDelay = *best.DelayMS
+		}
+		if best.SpeedKBps != nil {
+			item.BestSpeed = *best.SpeedKBps
+		}
+	}
+	a.mu.Lock()
+	a.History = append([]HistoryItem{item}, a.History...)
+	if len(a.History) > maxHistory {
+		a.History = a.History[:maxHistory]
+	}
+	a.mu.Unlock()
+	a.persistHistory()
+}
+
+func (a *App) persistHistory() {
+	a.mu.Lock()
+	list := append([]HistoryItem{}, a.History...)
+	a.mu.Unlock()
+
+	b, err := json.MarshalIndent(list, "", "  ")
+	if err != nil {
+		return
+	}
+	tmp := a.DataDir + "/history.json.tmp"
+	if err := writeFile(tmp, b); err != nil {
+		return
+	}
+	_ = rename(tmp, a.DataDir+"/history.json")
+}
+
+func (a *App) restoreHistory() {
+	b, err := readFile(a.DataDir + "/history.json")
+	if err != nil {
+		return
+	}
+	var list []HistoryItem
+	if err := json.Unmarshal(b, &list); err == nil {
+		a.mu.Lock()
+		a.History = list
+		a.mu.Unlock()
 	}
 }
 
@@ -313,6 +393,7 @@ func (a *App) persistLast(results []*engine.Result) {
 }
 
 func (a *App) restoreLast() {
+	a.restoreHistory()
 	b, err := readFile(a.DataDir + "/last_result.json")
 	if err != nil {
 		return
@@ -648,6 +729,8 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("/api/dns/rewrites", a.auth(a.handleDNSRewrites))
 	mux.HandleFunc("/api/guard/probe", a.auth(a.handleGuardProbe))
 	mux.HandleFunc("/api/export", a.auth(a.handleExport))
+	mux.HandleFunc("/api/history", a.auth(a.handleHistory))
+	mux.HandleFunc("/api/history/clear", a.auth(a.handleHistoryClear))
 
 	// 统一网关前缀适配：飞牛统一网关把 /app/cfip-opt 前缀透传过来，
 	// 剥掉此前缀后再交给 mux 处理，同时支持根路径直接访问。
@@ -894,6 +977,25 @@ func (a *App) handleExport(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		io.WriteString(w, engine.FormatText(rows)+"\n")
 	}
+}
+
+func (a *App) handleHistory(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	list := append([]HistoryItem{}, a.History...)
+	a.mu.Unlock()
+	writeJSON(w, 200, map[string]any{"ok": true, "history": list})
+}
+
+func (a *App) handleHistoryClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	a.mu.Lock()
+	a.History = []HistoryItem{}
+	a.mu.Unlock()
+	a.persistHistory()
+	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
 // ---------------------------------------------------------------- DNS 端点

@@ -103,6 +103,44 @@
     font-family:var(--mono);font-size:12.5px;line-height:1.75;overflow:auto;margin:0;color:#24292f}
   .muted{color:var(--muted)}
   .empty{padding:26px;text-align:center;color:var(--muted);font-size:13px}
+  /* 日志模块化 */
+  .log-tabs{display:flex;gap:5px;flex-wrap:wrap;margin:10px 0 8px}
+  .log-tab{border:1px solid var(--line);background:#fbfcfd;border-radius:6px;padding:3px 9px;
+    font-size:11.5px;cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:4px;transition:all .15s}
+  .log-tab:hover{border-color:var(--accent);color:var(--text)}
+  .log-tab.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+  .c-badge{font-size:10px;background:#eceef2;padding:0 5px;border-radius:999px;color:var(--muted);font-weight:normal}
+  .log-tab.on .c-badge{background:rgba(238,99,28,.15);color:var(--accent)}
+  .logs-box{font-family:var(--mono);font-size:11.5px;height:165px;overflow-y:auto;
+    background:#1f2328;color:#c9d1d9;border-radius:8px;padding:8px 10px;line-height:1.6;
+    border:1px solid #30363d;box-shadow:inset 0 1px 3px rgba(0,0,0,.3)}
+  .log-row{display:flex;align-items:flex-start;gap:6px;word-break:break-all;margin-bottom:2px}
+  .log-time{color:#8b949e;flex:0 0 auto;font-size:10.5px}
+  .log-tag{font-size:10px;padding:0 4px;border-radius:3px;flex:0 0 auto;font-weight:600}
+  .log-tag.speed{background:#1f3a5f;color:#58a6ff}
+  .log-tag.guard{background:#1a442a;color:#56d364}
+  .log-tag.dns{background:#4d2d14;color:#f0883e}
+  .log-tag.warn{background:#54221d;color:#ff7b72}
+  .log-tag.system{background:#30363d;color:#8b949e}
+  .log-row.sep{color:#8b949e;border-top:1px dashed #30363d;margin:4px 0;padding-top:3px;justify-content:center}
+  .log-text{flex:1}
+  .log-row.warn .log-text{color:#f0883e}
+  .log-row.err .log-text{color:#ff7b72;font-weight:600}
+  /* 历史记录 */
+  .hist-list{display:flex;flex-direction:column;gap:8px;max-height:480px;overflow-y:auto}
+  .hist-item{background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:10px 12px;transition:border-color .15s}
+  .hist-item:hover{border-color:#d0d7de}
+  .hist-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+  .hist-meta{display:flex;align-items:center;gap:8px;font-size:12.5px}
+  .hist-time{font-family:var(--mono);font-weight:600;color:var(--text)}
+  .hist-reason{font-size:11px;padding:1px 6px;border-radius:4px;background:#eef0f4;color:#57606a}
+  .hist-reason.manual{background:#e7f3ff;color:#0969da}
+  .hist-reason.guard{background:#dafbe1;color:#1a7f37}
+  .hist-reason.sched{background:#fbefff;color:#8250df}
+  .hist-summary{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .hist-badge{background:#f3f9f4;border:1px solid #cfe6d4;color:#1a5d2a;padding:2px 8px;border-radius:5px;font-weight:600;font-size:11.5px}
+  .hist-table{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px;display:none}
+  .hist-table.on{display:block}
   .logs{font-family:var(--mono);font-size:11.5px;color:var(--muted);max-height:150px;overflow:auto;
     white-space:pre-wrap;word-break:break-word;line-height:1.65;
     background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:12px}
@@ -338,12 +376,31 @@
     </section>
 
     <section class="card">
-      <h2>运行状态</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <h2 style="margin:0">运行状态</h2>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none">
+            <input type="checkbox" id="logAutoScroll" checked style="margin:0"> 自动滚动
+          </label>
+          <button class="btn ghost mini" id="btnClearLog" type="button" style="padding:2px 8px;font-size:11.5px">清屏</button>
+        </div>
+      </div>
       <div class="progress">
         <div class="bar"><i id="bar"></i></div>
         <div class="ptxt"><span id="pLabel">空闲</span><span id="pCount"></span></div>
       </div>
-      <div class="logs" id="logs">等待开始…</div>
+
+      <!-- 日志模块标签切换 -->
+      <div class="log-tabs" id="logTabs">
+        <button class="log-tab on" data-mod="all">全部 <span class="c-badge" id="cAll">0</span></button>
+        <button class="log-tab" data-mod="speed">⏱ 测速流水线 <span class="c-badge" id="cSpeed">0</span></button>
+        <button class="log-tab" data-mod="guard">🛡 可达性守护 <span class="c-badge" id="cGuard">0</span></button>
+        <button class="log-tab" data-mod="dns">🔄 DNS同步 <span class="c-badge" id="cDns">0</span></button>
+        <button class="log-tab" data-mod="warn">⚠️ 告警/系统 <span class="c-badge" id="cWarn">0</span></button>
+      </div>
+      <div class="logs-box" id="logsBox">
+        <div id="logsList">等待开始…</div>
+      </div>
     </section>
 
     <section class="card" id="schedCard">
@@ -400,10 +457,11 @@
     </section>
 
     <section class="card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
         <div class="tabs" style="margin:0">
-          <button data-tab="table" class="on">表格</button>
-          <button data-tab="text">文本</button>
+          <button data-tab="table" class="on">当前结果</button>
+          <button data-tab="text">文本模式</button>
+          <button data-tab="history">📜 历史测速记录 <span id="histCountBadge" class="c-badge" style="display:none">0</span></button>
         </div>
         <div class="spacer" style="flex:1"></div>
         <button class="btn ghost" id="btnCopy" style="padding:5px 11px;font-size:12.5px">复制文本</button>
@@ -431,6 +489,14 @@
       </div>
       <div id="paneText" style="display:none">
         <pre id="txt">—</pre>
+      </div>
+      <div id="paneHistory" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:12.5px;color:var(--muted)">自动保留最近 30 次测速记录（含测试时间、触发类型、最优节点与完整测速结果）</div>
+          <button class="btn ghost mini danger" id="btnClearHistory" type="button" style="padding:3px 8px;font-size:11.5px">清空历史</button>
+        </div>
+        <div class="empty" id="histEmpty" style="display:none">暂无历史测速记录</div>
+        <div class="hist-list" id="histList"></div>
       </div>
     </section>
 
@@ -467,6 +533,200 @@
 <script>
 const $ = (id) => document.getElementById(id);
 let CFG = null, COLO = [], STATE = null, TAB = "table", SORT = {k: null, dir: 1};
+let LOG_MOD = "all";
+let RAW_LOGS = [];
+let LOG_AUTO_SCROLL = true;
+let HISTORY_DATA = [];
+let EXPANDED_HIST = new Set();
+
+function escapeHtml(s){
+  return String(s||"").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function classifyLog(line){
+  if(line.includes("──────") || line.includes("────")) return "sep";
+  if(/守护|探测失败|可达性|轮换|连续.*次失败|已自动重测/.test(line)) return "guard";
+  if(/DNS|AdGuard|重写|同步/.test(line)) return "dns";
+  if(/\[警告\]|\[错误\]|失败|异常|拒绝|超时/.test(line)) return "warn";
+  if(/网络自检|地区过滤|延迟探测|下载测速|本轮结束|开始测速|样本|名额|完成/.test(line)) return "speed";
+  return "system";
+}
+
+function renderLogs(logs){
+  RAW_LOGS = logs || [];
+  const counts = { all: RAW_LOGS.length, speed: 0, guard: 0, dns: 0, warn: 0 };
+  const classified = RAW_LOGS.map(line => {
+    const mod = classifyLog(line);
+    if(mod === "speed") counts.speed++;
+    else if(mod === "guard") counts.guard++;
+    else if(mod === "dns") counts.dns++;
+    else if(mod === "warn") counts.warn++;
+    return { line, mod };
+  });
+
+  const cA = $("cAll"), cS = $("cSpeed"), cG = $("cGuard"), cD = $("cDns"), cW = $("cWarn");
+  if(cA) cA.textContent = counts.all;
+  if(cS) cS.textContent = counts.speed;
+  if(cG) cG.textContent = counts.guard;
+  if(cD) cD.textContent = counts.dns;
+  if(cW) cW.textContent = counts.warn;
+
+  const box = $("logsBox");
+  const list = $("logsList");
+  if(!box || !list) return;
+
+  const filtered = classified.filter(item => {
+    if(LOG_MOD === "all") return true;
+    if(LOG_MOD === "warn") return item.mod === "warn";
+    return item.mod === LOG_MOD || item.mod === "sep";
+  });
+
+  if(!filtered.length){
+    list.innerHTML = `<div class="log-row" style="color:#8b949e;padding:12px 0;text-align:center">暂无此类日志</div>`;
+    return;
+  }
+
+  const tagLabels = {
+    speed: "测速",
+    guard: "守护",
+    dns: "DNS",
+    warn: "告警",
+    system: "系统"
+  };
+
+  list.innerHTML = filtered.map(item => {
+    if(item.mod === "sep"){
+      return `<div class="log-row sep">${escapeHtml(item.line)}</div>`;
+    }
+    const m = item.line.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
+    const time = m ? m[1] : "";
+    let content = m ? m[2] : item.line;
+    const tagCls = item.mod;
+    const isErr = /失败|错误|异常/.test(content);
+    const isWarn = /警告/.test(content);
+    const rowCls = isErr ? "err" : isWarn ? "warn" : "";
+
+    return `<div class="log-row ${rowCls}">
+      <span class="log-time">${time}</span>
+      <span class="log-tag ${tagCls}">[${tagLabels[tagCls] || "系统"}]</span>
+      <span class="log-text">${escapeHtml(content)}</span>
+    </div>`;
+  }).join("");
+
+  if(LOG_AUTO_SCROLL){
+    box.scrollTop = box.scrollHeight;
+  }
+}
+
+async function loadHistory(){
+  try{
+    const res = await api("/api/history");
+    HISTORY_DATA = res.history || [];
+    renderHistory();
+  }catch(e){
+    toast("加载历史记录失败: " + e.message);
+  }
+}
+
+function renderHistory(){
+  const list = $("histList");
+  const empty = $("histEmpty");
+  const badge = $("histCountBadge");
+  if(badge){
+    badge.textContent = HISTORY_DATA.length;
+    badge.style.display = HISTORY_DATA.length ? "inline-block" : "none";
+  }
+  if(!list) return;
+  if(!HISTORY_DATA.length){
+    list.innerHTML = "";
+    if(empty) empty.style.display = "block";
+    return;
+  }
+  if(empty) empty.style.display = "none";
+
+  list.innerHTML = HISTORY_DATA.map((h)=>{
+    const isExp = EXPANDED_HIST.has(h.id);
+    let rCls = "manual";
+    if(h.reason.includes("守护")) rCls = "guard";
+    else if(h.reason.includes("定时")) rCls = "sched";
+
+    const bestSpeed = h.best_speed ? fmtInt(h.best_speed) : "—";
+    const bestDelay = h.best_delay ? (h.best_delay.toFixed(1) + " ms") : "—";
+    const bestColo = h.best_colo || "—";
+
+    let tableHtml = "";
+    if(isExp && h.results && h.results.length){
+      tableHtml = `<div class="hist-table on">
+        <table>
+          <thead><tr>
+            <th>#</th>
+            <th>IP</th>
+            <th>族</th>
+            <th>地区</th>
+            <th class="num">延迟</th>
+            <th class="num">σ</th>
+            <th class="num">下载</th>
+            <th class="num">σ</th>
+          </tr></thead>
+          <tbody>
+            ${h.results.map((r, i)=>`<tr>
+              <td>${i+1}</td>
+              <td class="ip">${r.ip}</td>
+              <td><span class="fam ${r._fam}">${r._fam}</span></td>
+              <td>${r.colo || "—"}</td>
+              <td class="num">${fmt(r.delay_ms, 1)}<span class="muted"> ms</span></td>
+              <td class="num">${sigma(r.delay_sigma)}</td>
+              <td class="num">${fmtInt(r.speed_kbps)}</td>
+              <td class="num">${sigma(r.speed_sigma)}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+    }
+
+    return `<div class="hist-item" data-id="${h.id}">
+      <div class="hist-head">
+        <div class="hist-meta">
+          <span class="hist-time">📅 ${h.time}</span>
+          <span class="hist-reason ${rCls}">${escapeHtml(h.reason)}</span>
+          <span style="font-size:11px;color:var(--muted)">耗时 ${h.duration_s}s · ${h.count} 个候选</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          ${h.best_ip ? `<button class="btn ghost mini btn-apply-ip" data-ip="${h.best_ip}" type="button" style="padding:2px 8px;font-size:11px">写入此IP</button>` : ""}
+          <button class="btn ghost mini btn-toggle-hist" data-id="${h.id}" type="button" style="padding:2px 8px;font-size:11px">
+            ${isExp ? "收起详情 ▲" : "详情表格 ▼"}
+          </button>
+        </div>
+      </div>
+      <div class="hist-summary">
+        <div>最优 IP：<b style="font-family:var(--mono);color:var(--text)">${h.best_ip || "—"}</b></div>
+        <div>地区：<b>${bestColo}</b></div>
+        <div>延迟：<b>${bestDelay}</b></div>
+        <div>下载速度：<b>${bestSpeed}</b></div>
+      </div>
+      ${tableHtml}
+    </div>`;
+  }).join("");
+
+  list.querySelectorAll(".btn-toggle-hist").forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.getAttribute("data-id");
+      if(EXPANDED_HIST.has(id)) EXPANDED_HIST.delete(id);
+      else EXPANDED_HIST.add(id);
+      renderHistory();
+    };
+  });
+  list.querySelectorAll(".btn-apply-ip").forEach(btn=>{
+    btn.onclick = async ()=>{
+      const ip = btn.getAttribute("data-ip");
+      if(!confirm(`确定将历史测速的最优 IP [${ip}] 立即写入 AdGuard Home 吗？`)) return;
+      try{
+        await api("/api/dns/sync", {method:"POST", body:"{}"});
+        toast("✓ 已将最优 IP 写入 DNS: " + ip, btn);
+      }catch(e){ toast(e.message, btn); }
+    };
+  });
+}
 
 // 统一网关前缀适配：当页面运行在 /app/cfip-opt/ 子路径时，API 自动补齐前缀
 const BASE_PATH = (()=>{
@@ -1033,8 +1293,14 @@ async function poll(){
     $("bar").style.width = pct + "%";
     $("pLabel").textContent = [p.label || "空闲", p.detail || ""].filter(Boolean).join(" · ");
     $("pCount").textContent = p.total ? (p.done + " / " + p.total) : "";
-    $("logs").textContent = (st.log||[]).join("\n") || "（暂无日志）";
-    $("logs").scrollTop = $("logs").scrollHeight;
+    renderLogs(st.log || []);
+    if(st.history_count != null){
+      const badge = $("histCountBadge");
+      if(badge){
+        badge.textContent = st.history_count;
+        badge.style.display = st.history_count ? "inline-block" : "none";
+      }
+    }
     $("btnRun").disabled = st.running;
     $("btnRun").textContent = st.running ? "运行中…" : "开始测速";
     $("btnCancel").style.display = st.running ? "" : "none";
@@ -1087,8 +1353,35 @@ document.querySelectorAll(".tabs button").forEach(b=>{
   b.onclick = ()=>{ document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); TAB = b.dataset.tab;
     $("paneTable").style.display = TAB === "table" ? "" : "none";
-    $("paneText").style.display = TAB === "text" ? "" : "none"; };
+    $("paneText").style.display = TAB === "text" ? "" : "none";
+    $("paneHistory").style.display = TAB === "history" ? "" : "none";
+    $("btnCopy").style.display = TAB === "text" ? "" : "none";
+    $("btnCsv").style.display = TAB === "table" ? "" : "none";
+    if(TAB === "history") loadHistory();
+  };
 });
+
+// 日志模块标签切换
+document.querySelectorAll(".log-tab").forEach(btn=>{
+  btn.onclick = ()=>{
+    document.querySelectorAll(".log-tab").forEach(b=>b.classList.remove("on"));
+    btn.classList.add("on");
+    LOG_MOD = btn.dataset.mod || "all";
+    renderLogs(RAW_LOGS);
+  };
+});
+$("logAutoScroll").onchange = (e)=>{ LOG_AUTO_SCROLL = e.target.checked; };
+$("btnClearLog").onclick = ()=>{ RAW_LOGS = []; renderLogs([]); };
+$("btnClearHistory").onclick = async ()=>{
+  if(!confirm("确定清空所有测速历史记录吗？")) return;
+  try{
+    await api("/api/history/clear", {method:"POST", body:"{}"});
+    HISTORY_DATA = [];
+    EXPANDED_HIST.clear();
+    renderHistory();
+    toast("✓ 测速历史已清空");
+  }catch(e){ toast(e.message); }
+};
 document.querySelectorAll("#tbl th").forEach(th=>{
   th.onclick = ()=>{
     const k = th.dataset.k;
