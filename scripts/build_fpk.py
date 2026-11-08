@@ -110,8 +110,8 @@ def main():
             log("已清理旧包:", old)
 
     # 清理 NAS 上的临时构建目录
-    sudo("rm -rf /tmp/cfip-opt-fnpack")
-    log("已清理 NAS /tmp 临时构建目录")
+    sudo("rm -rf /tmp/cfip-opt-fnpack " + BUILD)
+    log("已清理 NAS /tmp 临时构建目录与构建缓存")
 
     cli.close()
     log("\n== 全平台构建与打包完成！==")
