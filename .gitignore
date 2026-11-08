@@ -1,0 +1,26 @@
+# Python 字节码与缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 编译与构建二进制缓存（FPK 保留）
+dist/cfip-opt
+dist/cfip-opt-x86_64
+dist/cfip-opt-aarch64
+
+# 数据持久化目录与运行时文件
+data/
+*.log
+*.tmp
+*.bak
+
+# 操作系统与 IDE 临时配置
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.workbuddy/
+
+# 测试与中间产物
+_cand_*.png
+coverage.out

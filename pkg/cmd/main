@@ -1,0 +1,83 @@
+#!/bin/bash
+# fnOS 生命周期脚本：start / stop / status
+# 统一网关形态：后端只监听 Unix 域套接字，直接对接 fnOS 统一网关，不占任何端口。
+
+APP=cfip-opt
+V="/var/apps/$APP"
+APP_DIR="${TRIM_APPDEST:-$V/target}"
+VAR_DIR="${TRIM_PKGVAR:-$V/var}"
+BIN="$APP_DIR/bin/$APP"
+
+if [ ! -x "$BIN" ]; then
+  SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+  if [ -x "$SELF_DIR/$APP" ]; then
+    APP_DIR="$(cd "$SELF_DIR/.." && pwd)"
+  elif [ -x "$SELF_DIR/../bin/$APP" ]; then
+    APP_DIR="$(cd "$SELF_DIR/.." && pwd)"
+  fi
+  BIN="$APP_DIR/bin/$APP"
+  VAR_DIR="$(dirname "$APP_DIR")/@appdata/$APP"
+fi
+
+# 多架构（全平台）自适应适配：检测当前 CPU 架构并自动链接/分发
+ARCH="$(uname -m 2>/dev/null)"
+ARCH_BIN=""
+case "$ARCH" in
+  x86_64|amd64) ARCH_BIN="$APP_DIR/bin/cfip-opt-x86_64" ;;
+  aarch64|arm64) ARCH_BIN="$APP_DIR/bin/cfip-opt-aarch64" ;;
+esac
+
+if [ -n "$ARCH_BIN" ] && [ -f "$ARCH_BIN" ]; then
+  if [ ! -x "$BIN" ] || [ -L "$BIN" -a ! -e "$BIN" ]; then
+    (cd "$APP_DIR/bin" && ln -sf "$(basename "$ARCH_BIN")" "$APP" 2>/dev/null && chmod 755 "$ARCH_BIN" "$APP" 2>/dev/null)
+  fi
+  BIN="$APP_DIR/bin/$APP"
+  [ -x "$BIN" ] || BIN="$ARCH_BIN"
+fi
+
+mkdir -p "$VAR_DIR" 2>/dev/null
+
+export CFIP_DATA="$VAR_DIR"
+# 统一网关：socket 放在 target 目录下，即 $APP_DIR/$APP.sock
+export CFIP_SOCK="$APP_DIR/$APP.sock"
+unset CFIP_LISTEN CFIP_ALLOWED_CIDRS
+
+fail_msg() {
+  if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+    echo "$1" > "$TRIM_TEMP_LOGFILE"
+  else
+    echo "$1" >&2
+  fi
+}
+
+case "${1:-}" in
+  start|restart)
+    if [ ! -x "$BIN" ]; then
+      fail_msg "可执行文件缺失：$BIN"
+      exit 1
+    fi
+    "$BIN" daemon
+    rc=$?
+    if [ $rc -ne 0 ]; then
+      fail_msg "启动失败，请检查日志：$VAR_DIR/$APP.log"
+      exit 1
+    fi
+    # 建立软链，两处皆可访问 socket
+    ln -sf "$APP_DIR/$APP.sock" "$VAR_DIR/$APP.sock" 2>/dev/null || true
+    systemctl reload trim_http_cgi 2>/dev/null || true
+    exit 0
+    ;;
+  stop)
+    "$BIN" stop
+    rm -f "$APP_DIR/$APP.sock" "$VAR_DIR/$APP.sock" 2>/dev/null || true
+    exit 0
+    ;;
+  status)
+    "$BIN" status >/dev/null 2>&1
+    exit $?
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

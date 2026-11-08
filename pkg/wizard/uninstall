@@ -1,0 +1,27 @@
+[
+  {
+    "stepTitle": "卸载设置",
+    "items": [
+      {
+        "type": "radio",
+        "field": "wizard_keep_data",
+        "label": "应用数据（配置、测速结果、地区库）",
+        "options": [
+          {
+            "label": "保留数据（重新安装后可继续使用）",
+            "value": "keep"
+          },
+          {
+            "label": "删除所有数据（不可恢复）",
+            "value": "remove"
+          }
+        ],
+        "initValue": "keep"
+      },
+      {
+        "type": "tips",
+        "helpText": "应用数据位于 /vol*/@appdata/cfip-opt，包含 AdGuard 连接配置、上一轮测速结果与已学到的地区库。删除后需重新配置并重新补探。"
+      }
+    ]
+  }
+]

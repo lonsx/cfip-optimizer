@@ -1,0 +1,21 @@
+services:
+  cfip-opt:
+    image: cfip-opt:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cfip-opt
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      - TZ=Asia/Shanghai
+      - CFIP_LISTEN=0.0.0.0:8787
+      - CFIP_DATA=/data
+      # 允许访问 Dashboard 的来源网段。默认为全网段；生产环境可配置为局域网段（例如 192.168.0.0/16,10.0.0.0/8）
+      - CFIP_ALLOWED_CIDRS=0.0.0.0/0,::/0
+    volumes:
+      # 持久化配置文件与历史测速结果
+      - ./data:/data
+    # 可选：若需要精准避开 Docker 内部 NAT 损耗以获得与宿主机完全一致的延迟测速，可取消下方 host 网络模式的注释
+    # network_mode: host

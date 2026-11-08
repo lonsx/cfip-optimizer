@@ -1,0 +1,3 @@
+#!/bin/bash
+# cfip-opt 生命周期脚本：uninstall_init
+exit 0

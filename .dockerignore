@@ -1,0 +1,12 @@
+.git
+.github
+dist
+pkg
+archive
+docs
+scripts
+*.fpk
+*.png
+*.log
+*.tar.gz
+README.md

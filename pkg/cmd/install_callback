@@ -1,0 +1,42 @@
+#!/bin/bash
+# 安装完成后由 fnOS 应用中心作为 root 调用。
+V="/var/apps/cfip-opt"
+APP_DIR="${TRIM_APPDEST:-$V/target}"
+VAR_DIR="${TRIM_PKGVAR:-$V/var}"
+
+mkdir -p "$VAR_DIR"
+chown -R cfip-opt:cfip-opt "$VAR_DIR" 2>/dev/null || true
+
+# 多架构适配：根据当前 CPU 架构自动建立 bin/cfip-opt 软链
+ARCH="$(uname -m 2>/dev/null)"
+TARGET_BIN=""
+case "$ARCH" in
+  x86_64|amd64) TARGET_BIN="cfip-opt-x86_64" ;;
+  aarch64|arm64) TARGET_BIN="cfip-opt-aarch64" ;;
+esac
+
+if [ -n "$TARGET_BIN" ] && [ -f "$APP_DIR/bin/$TARGET_BIN" ]; then
+  (cd "$APP_DIR/bin" && ln -sf "$TARGET_BIN" cfip-opt && chmod 755 "$TARGET_BIN" cfip-opt)
+fi
+
+# 统一网关注册补丁：确保 trim_sac.entry 与 appcenter.app_service 正确填充 gateway 字段
+psql -h /var/run/postgresql -U postgres -d trim_sac -c "
+update entry set
+  gateway_socket = '$APP_DIR/cfip-opt.sock',
+  gateway_prefix = '/app/cfip-opt',
+  url            = '{\"path\":\"/app/cfip-opt/\"}',
+  open_type      = 'iframe',
+  is_display     = true
+where app_name = 'cfip-opt';
+" 2>/dev/null || true
+
+psql -h /var/run/postgresql -U postgres -d appcenter -c "
+update app_service set
+  gateway_socket = '$APP_DIR/cfip-opt.sock',
+  gateway_prefix = '/app/cfip-opt',
+  url            = '://\${host}/app/cfip-opt/',
+  default_url    = '://\${host}/app/cfip-opt/'
+where service_name = 'cfip-opt.Application';
+" 2>/dev/null || true
+
+exit 0

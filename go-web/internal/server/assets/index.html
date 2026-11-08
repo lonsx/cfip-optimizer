@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CF IP 优选 · 多轮统计版</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e4e6eb; --text:#1f2328; --muted:#6b7280;
+    --accent:#2f6feb; --accent-soft:#eef3fe; --warn-bg:#fff8e6; --warn-line:#f0d59a;
+    --warn-text:#8a5b00; --ok:#1a7f37; --bad:#c02c22;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 22px;
+    display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:20}
+  header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:12px}
+  header .spacer{flex:1}
+  .chip{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--accent-soft);
+    color:var(--accent);border:1px solid #d6e2fd}
+  .chip.run{background:#eaf6ec;color:var(--ok);border-color:#c8e6cf}
+  .chip.ok{background:#eaf6ec;color:var(--ok);border-color:#c8e6cf}
+  .chip.err{background:#fdecea;color:var(--bad);border-color:#f5c6c2}
+  main{max-width:1360px;margin:0 auto;padding:18px;display:grid;grid-template-columns:360px 1fr;gap:16px}
+  @media(max-width:1040px){main{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .card h2{font-size:13px;margin:0 0 12px;font-weight:600;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.6px}
+  .card.settings{position:sticky;top:78px;align-self:start;max-height:calc(100vh - 96px);overflow:auto}
+  .settings-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .settings-head h2{margin:0}
+  .cfg-nav{display:flex;background:#eef0f4;padding:3px;border-radius:8px;gap:2px;margin-bottom:14px}
+  .cfg-nav button{flex:1;border:0;background:transparent;padding:6px 2px;font:inherit;font-size:12px;
+    cursor:pointer;color:var(--muted);border-radius:6px;font-weight:500;transition:all .15s;text-align:center}
+  .cfg-nav button:hover{color:var(--text)}
+  .cfg-nav button.on{background:#fff;color:var(--accent);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .cfg-group{margin-bottom:14px}
+  .cfg-group.hide{display:none}
+  .cfg-group-title{font-size:12px;font-weight:600;color:var(--text);margin:0 0 10px;display:flex;align-items:center;justify-content:space-between}
+  .cfg-badge{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font-weight:600;font-family:var(--mono)}
+  label.f{display:block;margin-bottom:10px;font-size:12.5px;color:var(--muted)}
+  label.f span{display:block;margin-bottom:4px}
+  input[type=text],input[type=number],input[type=password],select{
+    width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
+    font:inherit;font-size:13px;background:#fff;color:var(--text)}
+  input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  .row{display:flex;gap:8px}
+  .row>*{flex:1;min-width:0}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:10px}
+  .seg button{flex:1;border:0;background:#fff;padding:7px 0;font:inherit;font-size:13px;
+    cursor:pointer;color:var(--muted)}
+  .seg button.on{background:var(--accent);color:#fff;font-weight:600}
+  .cb{display:flex;align-items:flex-start;gap:7px;margin-bottom:9px;font-size:12.5px;
+    color:var(--text);cursor:pointer}
+  .cb input{margin-top:2px}
+  .cb .hint{color:var(--muted);font-size:11.5px;display:block}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 8px}
+  .chips button{font-size:11.5px;padding:3px 7px;border-radius:999px;border:1px solid var(--line);
+    background:#fff;color:var(--muted);cursor:pointer}
+  .chips button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .actions{display:flex;gap:8px;margin-top:14px}
+  .btn{border:0;border-radius:8px;padding:9px 14px;font:inherit;font-size:13.5px;
+    font-weight:600;cursor:pointer}
+  .btn.primary{background:var(--accent);color:#fff;flex:1}
+  .btn.primary:disabled{background:#b9c6dd;cursor:not-allowed}
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--text)}
+  .btn.danger{background:#fff;border:1px solid #f0c2be;color:var(--bad)}
+  .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:10px;
+    padding:12px 14px;color:var(--warn-text);font-size:12.5px;line-height:1.65}
+  .warn b{color:#7a4f00}
+  .warn ul{margin:6px 0 0;padding-left:18px}
+  .warn li{margin:2px 0}
+  .est{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+  .est div{background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+  .est .k{font-size:11px;color:var(--muted)}
+  .est .v{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+  .progress{margin-top:4px}
+  .bar{height:8px;background:#eceef2;border-radius:999px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+  .ptxt{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 11px;
+    font:inherit;font-size:12.5px;cursor:pointer;color:var(--muted)}
+  .tabs button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:7px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11.5px;color:var(--muted);font-weight:600;cursor:pointer;user-select:none;background:#fbfcfd}
+  th:hover{color:var(--accent)}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+  td.ip{font-family:var(--mono);font-size:12.5px}
+  tr.best td{background:#f3f9f4}
+  .tag{font-size:11px;padding:1px 6px;border-radius:5px;background:var(--accent-soft);color:var(--accent)}
+  .tag.best{background:#e6f4ea;color:var(--ok)}
+  .fam{font-size:10.5px;padding:1px 6px;border-radius:5px;font-family:var(--mono);
+    background:#eef0f4;color:#57606a;border:1px solid #e0e3e9}
+  .fam.v6{background:#f0edfb;color:#5b46b8;border-color:#ddd5f5}
+  .winner{margin:0 0 10px;padding:9px 12px;border-radius:8px;background:#f3f9f4;
+    border:1px solid #cfe6d4;color:#1a5d2a;font-size:12.5px;font-weight:600}
+  pre{background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:12px;
+    font-family:var(--mono);font-size:12.5px;line-height:1.75;overflow:auto;margin:0;color:#24292f}
+  .muted{color:var(--muted)}
+  .empty{padding:26px;text-align:center;color:var(--muted);font-size:13px}
+  .logs{font-family:var(--mono);font-size:11.5px;color:var(--muted);max-height:150px;overflow:auto;
+    white-space:pre-wrap;word-break:break-word;line-height:1.65;
+    background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:12px}
+  .toast{position:fixed;background:#1f2328;color:#fff;padding:8px 14px;
+    border-radius:8px;font-size:12.5px;font-weight:500;opacity:0;transition:opacity .15s ease, transform .15s ease;
+    pointer-events:none;z-index:999;box-shadow:0 6px 20px rgba(0,0,0,.22);
+    white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .toast.on{opacity:.96}
+  .toast.anchored::after{
+    content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+    border:6px solid transparent;border-top-color:#1f2328;
+  }
+  .hintline{font-size:11.5px;color:var(--muted);margin:-4px 0 10px}
+  /* DNS 区 */
+  .dnsrow{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .dnsrow input{padding:5px 8px}
+  .dnsrow .x{flex:0 0 26px;border:0;background:#fff;border:1px solid var(--line);border-radius:6px;
+    color:var(--muted);cursor:pointer;height:30px}
+  .dnsrow .x:hover{color:var(--bad);border-color:#f0c2be}
+  .subh{font-size:12px;font-weight:600;color:var(--text);margin:12px 0 6px}
+  .dnsstat{background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:9px 11px;
+    font-size:12.5px;margin-top:10px;line-height:1.7}
+  .dnsstat .ok{color:var(--ok)} .dnsstat .bad{color:var(--bad)}
+  .mini{padding:5px 10px;font-size:12.5px;border-radius:7px}
+  .rwbox{max-height:280px;overflow:auto;margin-top:10px}
+  /* 登录遮罩：飞牛 CGI 反代下拿不到浏览器地址，无法用 Basic 质询，
+     所以做成口令换会话 Cookie 的页面内表单 */
+  #login{position:fixed;inset:0;background:rgba(245,246,248,.94);z-index:90;
+    display:none;align-items:center;justify-content:center}
+  #login.on{display:flex}
+  #login .box{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:26px 24px;width:320px;box-shadow:0 8px 28px rgba(0,0,0,.08)}
+  #login h2{font-size:15px;margin:0 0 4px}
+  #login p{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  #login input{width:100%;padding:8px 10px;margin-bottom:10px}
+  #login button{width:100%;padding:9px;font-size:13.5px}
+  #login .err{color:var(--bad);font-size:12.5px;min-height:18px;margin-bottom:6px}
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="box">
+    <h2>需要登录</h2>
+    <p>请输入访问口令（在下方「访问与安全」里设置）</p>
+    <input type="password" id="loginPwd" placeholder="口令" autocomplete="current-password">
+    <div class="err" id="loginErr"></div>
+    <button class="primary" id="loginBtn">进入</button>
+  </div>
+</div>
+<header>
+  <div>
+    <h1>CF IP 优选 · 多轮统计版</h1>
+    <div class="sub">多轮均值 + 标准差 · 测速完成自动写入 AdGuard DNS 重写</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="chip" id="statusChip">空闲</span>
+</header>
+
+<main>
+  <!-- 左：参数分类存放 -->
+  <section class="card settings">
+    <div class="settings-head">
+      <h2>参数配置</h2>
+      <span class="chip" id="cfgSummaryChip">TLS 握手</span>
+    </div>
+
+    <!-- 分类导航切换卡：按测试流水线阶段排序：1.地区与源 -> 2.延迟探测 -> 3.下载测速 -->
+    <div class="cfg-nav" id="cfgNav">
+      <button type="button" data-cat="source" class="on">🌐 地区与源</button>
+      <button type="button" data-cat="latency">⏱ 延迟设置</button>
+      <button type="button" data-cat="speed">🚀 测速设置</button>
+      <button type="button" data-cat="all">📋 全部</button>
+    </div>
+
+    <!-- 1. 地区与 IP 源设置 (Phase 1: Region & Pool) -->
+    <div class="cfg-group" data-cat="source">
+      <div class="cfg-group-title">
+        <span>🌐 地区过滤与 IP 源</span>
+        <span class="cfg-badge">Phase 1: Region & Pool</span>
+      </div>
+
+      <label class="f"><span>目标地区码（逗号分隔；留空=不限地区）</span>
+        <input type="text" id="cfcolo" placeholder="HKG,LAX,NRT"></label>
+      <div class="chips" id="coloChips"></div>
+
+      <label class="cb"><input type="checkbox" id="region_probe_unknown">
+        <span>ping 模式补探测未知地区<span class="hint">库里没有的 IP 发送 1 次 HEAD 请求判定并写回地区库</span></span></label>
+
+      <div class="subh" style="margin-top:14px">IPv4 候选段</div>
+      <label class="f"><span>IPv4 段文件</span><input type="text" id="ip_file"></label>
+      <label class="cb"><input type="checkbox" id="test_all">
+        <span>遍历网段内全部 IP（默认每个 /24 随机抽样 1 个）</span></label>
+
+      <div class="subh" style="margin-top:14px">IPv6 候选段</div>
+      <label class="cb"><input type="checkbox" id="ipv6">
+        <span>同时测 IPv6<span class="hint">读 ipv6.txt 段文件并在每条前缀随机抽样取点</span></span></label>
+      <div class="row">
+        <label class="f"><span>IPv6 段文件</span><input type="text" id="ipv6_file"></label>
+        <label class="f"><span>每条前缀取样数</span><input type="number" id="v6_per_cidr" min="1" max="200"></label>
+      </div>
+      <div class="warn" id="v6Banner" style="display:none;padding:8px 10px;font-size:12px"></div>
+    </div>
+
+    <!-- 2. 延迟探测参数 (Phase 2: Latency Ping) -->
+    <div class="cfg-group hide" data-cat="latency">
+      <div class="cfg-group-title">
+        <span>⏱ 延迟探测参数</span>
+        <span class="cfg-badge">Phase 2: Ping</span>
+      </div>
+
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="ping" class="on">TCP ping</button>
+        <button type="button" data-mode="tls">TLS 握手</button>
+        <button type="button" data-mode="httping">HTTPing</button>
+      </div>
+      <div class="hintline" id="modeHint">ping 模式对每个 IP 做多轮 TCP 建连，取平均并算样本标准差。</div>
+
+      <div class="row">
+        <label class="f"><span>目标端口</span><input type="number" id="port" min="1" max="65535"></label>
+        <label class="f"><span>并发线程</span><input type="number" id="routines" min="1" max="512"></label>
+      </div>
+
+      <div class="row">
+        <label class="f"><span>延迟轮次（ping）</span><input type="number" id="latency_rounds" min="1" max="30"></label>
+        <label class="f"><span>轮间间隔 (ms)</span><input type="number" id="round_gap_ms" min="0" max="5000"></label>
+      </div>
+
+      <div class="row">
+        <label class="f"><span>连续失败即放弃（次）</span>
+          <input type="number" id="fast_fail" min="0" max="10">
+          <span class="hint" style="display:block;margin-top:2px">
+            连续 N 次不可达后，直接跳过该 IP 剩余轮次（默认 2）
+          </span></label>
+      </div>
+
+      <label class="cb"><input type="checkbox" id="warmup_discard">
+        <span>丢弃首轮（warm-up 热身）<span class="hint">消除冷启动与握手缓存抖动，第一轮不计入均值</span></span></label>
+
+      <div class="row">
+        <label class="f"><span>延迟上限 (ms)</span><input type="number" id="max_delay" min="0"></label>
+        <label class="f"><span>丢包率上限</span><input type="number" id="max_loss" min="0" max="1" step="0.1"></label>
+      </div>
+
+      <label class="f">
+        <span>延迟候选上限（0=不限）</span>
+        <input type="number" id="latency_cap" min="0" max="20000">
+        <span class="hint" style="display:block;margin-top:2px">
+          地区过滤后送入测延迟的最大 IP 数（v4/v6 按对半规则各占一半）
+        </span>
+      </label>
+
+      <label class="f" id="fTestUrl">
+        <span>HTTPing 测速 / 地区探测地址</span>
+        <input type="text" id="test_url" placeholder="https://speed.cloudflare.com/">
+      </label>
+    </div>
+
+    <!-- 3. 下载测速参数 (Phase 3: Download Speed) -->
+    <div class="cfg-group hide" data-cat="speed">
+      <div class="cfg-group-title">
+        <span>🚀 下载测速参数</span>
+        <span class="cfg-badge">Phase 3: Speed</span>
+      </div>
+
+      <label class="cb"><input type="checkbox" id="dl_enabled">
+        <span>启用下载带宽测速<span class="hint">取延迟最短的前 N 个 IP，逐一进行实际下载测真实带宽</span></span></label>
+
+      <div id="dlFields">
+        <label class="cb"><input type="checkbox" id="split_by_family">
+          <span>测速名额按地址族对半分<span class="hint">上限 20 → IPv4 占 10 + IPv6 占 10；避免 IPv6 被全局排挤出测速名单</span></span></label>
+
+        <div class="row">
+          <label class="f"><span>测速名额总数 N</span><input type="number" id="dl_top_n" min="1" max="200"></label>
+          <label class="f"><span>测速轮次</span><input type="number" id="dl_rounds" min="1" max="10"></label>
+        </div>
+
+        <div class="row">
+          <label class="f"><span>单轮窗口 (s)</span><input type="number" id="dl_window" min="1" max="30" step="1"></label>
+          <label class="f"><span>下限 (KB/s)</span><input type="number" id="dl_min" min="0"></label>
+        </div>
+
+        <label class="f"><span>下载测速文件地址</span><input type="text" id="dl_url" placeholder="https://speed.cloudflare.com/__down?bytes=100000000"></label>
+      </div>
+    </div>
+
+    <!-- 4. 访问口令 (可折叠) -->
+    <details style="margin:12px 0 6px;border-top:1px dashed var(--line);padding-top:10px">
+      <summary style="font-size:12px;color:var(--muted);cursor:pointer;user-select:none;outline:none">
+        🔒 访问口令设置（点击展开）
+      </summary>
+      <label class="f" style="margin-top:8px">
+        <span>访问口令（留空=不设/不修改）</span>
+        <input type="password" id="password" placeholder="不修改">
+      </label>
+    </details>
+
+    <div class="actions">
+      <button class="btn primary" id="btnRun">开始测速</button>
+      <button class="btn danger" id="btnCancel" style="display:none">取消</button>
+      <button class="btn ghost" id="btnSave">仅保存</button>
+    </div>
+  </section>
+
+  <!-- 右：告警 + 进度 + 结果 -->
+  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+    <section class="warn" id="netBanner" style="display:none;background:#fdecea;border-color:#f3b6b0;color:#8c1d18">
+      <b>⛔ 本网络存在 TCP 拦截 / 透明代理</b>
+      <div id="netBannerText" style="margin-top:6px"></div>
+    </section>
+
+    <section class="warn">
+      <b>⚠ 先把风险说清楚</b>
+      <ul>
+        <li><b>多轮会更容被 ban。</b>对同一批 IP 反复建连 / 反复下载，比单轮更接近机器人特征，
+            Cloudflare 边缘或测速源都可能返回 429 / 直接断连。轮次、并发都不是越大越好。</li>
+        <li><b>平均与方差本身更吃资源。</b>请求量 ≈ 候选 IP × 轮次，CPU 与流量同比例上升；
+            在 NAS 这种小内存机器上，并发开太大会把测速变成压力测试。</li>
+        <li><b>建议缩小地区范围。</b>把地区码限定成你真在用的节点（如 <code>HKG,LAX</code>），
+            候选数与探测次数会成倍下降，测量也更稳。</li>
+        <li><b>三种模式都支持多轮采样。</b>TCP / TLS / HTTPing 统一按「每 IP 轮数」
+            采样并计算 σ。<code>httping</code> 早先强制单次是为了省 CF Worker 额度，
+            测速源换成 Cloudflare 官方地址后该限制已取消——单次样本看不出抖动，
+            一个偶然 20ms 的 IP 会被误判成最优。</li>
+        <li><b>httping 是最省事的模式。</b>一次 HEAD 同时拿到延迟、σ 和
+            <code>cf-colo</code> 地区码，地区过滤阶段直接复用，不再额外探测。</li>
+      </ul>
+      <div class="est" id="est">
+        <div><div class="k">延迟探测次数</div><div class="v" id="estProbe">—</div></div>
+        <div><div class="k">地区补探测</div><div class="v" id="estGate">—</div></div>
+        <div><div class="k">下载测速量</div><div class="v" id="estDl">—</div></div>
+        <div><div class="k">预计耗时</div><div class="v" id="estTime">—</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>运行状态</h2>
+      <div class="progress">
+        <div class="bar"><i id="bar"></i></div>
+        <div class="ptxt"><span id="pLabel">空闲</span><span id="pCount"></span></div>
+      </div>
+      <div class="logs" id="logs">等待开始…</div>
+    </section>
+
+    <section class="card" id="schedCard">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <h2 style="margin:0">定时任务</h2>
+        <span class="chip" id="schedChip">—</span>
+      </div>
+      <div class="row">
+        <label class="f"><span>自动测速间隔（分钟，0 = 关闭）</span>
+          <input type="number" id="interval_minutes" min="0" max="10080" step="1"></label>
+        <label class="f"><span>启动后立即测速</span>
+          <select id="run_on_start">
+            <option value="1">开启</option>
+            <option value="0">关闭</option>
+          </select></label>
+      </div>
+      <div class="est" style="margin-bottom:10px">
+        <div><div class="k">上次定时触发</div><div class="v" id="sLast">—</div></div>
+        <div><div class="k">下次触发</div><div class="v" id="sNext">—</div></div>
+      </div>
+      <div class="hint" style="font-size:12px;opacity:.75;line-height:1.7">
+        定时任务负责「定期找更快的 IP」，可达性守护负责「当前 IP 挂了马上换」。
+        两者互补：只有定时，IP 挂了要等下一周期；只有守护，网络变好了也不会主动换更快线路。
+      </div>
+    </section>
+
+    <section class="card" id="guardCard">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <h2 style="margin:0">可达性守护</h2>
+        <span class="chip" id="guardChip">—</span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn ghost" id="btnGuardProbe" type="button" style="padding:5px 11px;font-size:12.5px">立即探测</button>
+      </div>
+      <div class="est" style="margin-bottom:10px">
+        <div><div class="k">守护目标</div><div class="v" id="gIp">—</div></div>
+        <div><div class="k">当前延迟</div><div class="v" id="gRtt">—</div></div>
+        <div><div class="k">连续失败</div><div class="v" id="gFails">—</div></div>
+        <div><div class="k">下次检查</div><div class="v" id="gNext">—</div></div>
+      </div>
+      <div class="row">
+        <label class="f"><span>守护检查间隔（秒）</span>
+          <input type="number" id="gw_interval" min="15" max="3600" step="15" placeholder="60">
+        </label>
+        <label class="f"><span>故障快速轮换</span>
+          <select id="gw_failover">
+            <option value="1">开启（先从结果表切备选）</option>
+            <option value="0">关闭（挂了直接整轮重测）</option>
+          </select></label>
+      </div>
+      <div class="hintline" style="margin-top:-4px">
+        默认 60 秒检查一次当前写入 DNS 的 IP。若觉得频繁，推荐设为 120 ~ 300 秒（2 ~ 5 分钟）。修改后在左侧点「仅保存」即可立即生效。
+      </div>
+      <div class="hint" id="gText" style="font-size:12px;opacity:.75;line-height:1.7;margin-top:6px"></div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="tabs" style="margin:0">
+          <button data-tab="table" class="on">表格</button>
+          <button data-tab="text">文本</button>
+        </div>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn ghost" id="btnCopy" style="padding:5px 11px;font-size:12.5px">复制文本</button>
+        <button class="btn ghost" id="btnCsv" style="padding:5px 11px;font-size:12.5px">导出 CSV</button>
+      </div>
+      <div id="paneTable">
+        <div class="winner" id="winnerLine" style="display:none"></div>
+        <div class="empty" id="tblEmpty">还没有结果，点「开始测速」。</div>
+        <table id="tbl" style="display:none">
+          <thead><tr>
+            <th data-k="_i" class="num">#</th>
+            <th data-k="ip">IP</th>
+            <th data-k="_fam">族</th>
+            <th data-k="colo">地区</th>
+            <th data-k="delay_ms" class="num">延迟</th>
+            <th data-k="delay_sigma" class="num">σ</th>
+            <th data-k="_dn" class="num">轮</th>
+            <th data-k="speed_kbps" class="num">下载</th>
+            <th data-k="speed_sigma" class="num">σ</th>
+            <th data-k="_sn" class="num">轮</th>
+            <th data-k="_tag">备注</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="paneText" style="display:none">
+        <pre id="txt">—</pre>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>DNS 重写同步</h2>
+      <div class="hintline" style="margin-top:-6px">测速完成后自动把最优 IP 写入下方实例的 DNS 重写表（整表接管：期望之外的记录会被清理）。</div>
+      <label class="cb"><input type="checkbox" id="dns_auto">
+        <span>测速完成后自动写入<span class="hint">取「实测下载带宽最大」的那一个（IPv4/IPv6 同台比较，谁快用谁）；全部无测速数据时退化为延迟最低</span></span></label>
+
+      <div class="subh">DNS 实例（AdGuard Home）</div>
+      <div id="dnsInsts"></div>
+      <button class="btn ghost mini" id="dnsAddInst">＋ 添加实例</button>
+
+      <div class="subh">要写入的域名</div>
+      <div id="dnsDomains"></div>
+      <button class="btn ghost mini" id="dnsAddDom">＋ 添加域名</button>
+
+      <div class="subh">手动重写（随最优 IP 一并下发到所有实例）</div>
+      <div id="dnsManual"></div>
+      <button class="btn ghost mini" id="dnsAddManual">＋ 添加手动重写</button>
+
+      <div class="actions">
+        <button class="btn ghost" id="dnsSave" style="flex:0 0 auto">保存 DNS 配置</button>
+        <button class="btn ghost" id="dnsSyncNow" style="flex:0 0 auto">立即写入</button>
+        <button class="btn ghost" id="dnsView" style="flex:0 0 auto">查看实例重写表</button>
+      </div>
+      <div class="dnsstat" id="dnsStat" style="display:none"></div>
+      <div class="rwbox" id="rwBox" style="display:none"><pre id="rwPre"></pre></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let CFG = null, COLO = [], STATE = null, TAB = "table", SORT = {k: null, dir: 1};
+
+// 统一网关前缀适配：当页面运行在 /app/cfip-opt/ 子路径时，API 自动补齐前缀
+const BASE_PATH = (()=>{
+  const p = location.pathname;
+  const idx = p.indexOf("/app/cfip-opt");
+  if(idx >= 0) return p.slice(0, idx + "/app/cfip-opt".length);
+  return "";
+})();
+function resolvePath(p){
+  return (BASE_PATH && p.startsWith("/")) ? BASE_PATH + p : p;
+}
+
+function toast(msg, anchor){
+  const t = $("toast");
+  t.textContent = msg;
+  if(anchor && anchor.getBoundingClientRect){
+    const r = anchor.getBoundingClientRect();
+    t.style.left = (r.left + r.width / 2) + "px";
+    t.style.top = Math.max(8, r.top - 8) + "px";
+    t.style.bottom = "auto";
+    t.style.right = "auto";
+    t.style.transform = "translate(-50%, -100%)";
+    t.className = "toast on anchored";
+  } else {
+    // 居中偏上（屏幕正上方醒目位置）
+    t.style.left = "50%";
+    t.style.top = "24px";
+    t.style.bottom = "auto";
+    t.style.right = "auto";
+    t.style.transform = "translateX(-50%)";
+    t.className = "toast on";
+  }
+  clearTimeout(t._t);
+  t._t = setTimeout(()=> t.classList.remove("on"), 2200);
+}
+async function api(path, opts){
+  const r = await fetch(resolvePath(path), Object.assign({headers:{"Content-Type":"application/json"}, credentials:"same-origin"}, opts||{}));
+  if(!r.ok){ let m = r.statusText; try{ m = (await r.json()).error || m; }catch(e){}
+    // 会话过期/未登录时弹登录框，而不是在 toast 里反复报同一个错
+    if(r.status === 401) showLogin(m || "未登录或会话已过期");
+    throw new Error(m||("HTTP "+r.status)); }
+  return r.json();
+}
+
+/* ---------- 登录 ---------- */
+let LOGIN_SHOWN = false;
+function showLogin(msg){
+  LOGIN_SHOWN = true;
+  $("login").classList.add("on");
+  $("loginErr").textContent = msg || "";
+  setTimeout(()=>$("loginPwd").focus(), 50);
+}
+async function doLogin(){
+  const pwd = $("loginPwd").value;
+  if(!pwd){ $("loginErr").textContent = "请输入口令"; return; }
+  $("loginBtn").disabled = true; $("loginErr").textContent = "";
+  try{
+    const r = await fetch(resolvePath("/api/login"), {method:"POST", credentials:"same-origin",
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({password: pwd})});
+    if(!r.ok){
+      let m = "口令错误"; try{ m = (await r.json()).error || m; }catch(e){}
+      $("loginErr").textContent = m; return;
+    }
+    $("login").classList.remove("on");
+    $("loginPwd").value = "";
+    LOGIN_SHOWN = false;
+    await boot();
+  }catch(e){ $("loginErr").textContent = "登录失败：" + e.message; }
+  finally{ $("loginBtn").disabled = false; }
+}
+
+/* ---------- 配置 ---------- */
+function fillForm(cfg){
+  document.querySelectorAll("#modeSeg button").forEach(b=>{
+    b.classList.toggle("on", b.dataset.mode === cfg.mode);
+  });
+  $("port").value = cfg.port;
+  $("routines").value = cfg.routines;
+  $("latency_rounds").value = cfg.latency_rounds;
+  $("fast_fail").value = (cfg.fast_fail ?? 2);
+  $("round_gap_ms").value = cfg.round_gap_ms;
+  $("warmup_discard").checked = !!cfg.warmup_discard;
+  $("max_delay").value = cfg.max_delay;
+  $("max_loss").value = cfg.max_loss;
+  $("cfcolo").value = cfg.cfcolo || "";
+  $("region_probe_unknown").checked = !!cfg.region_probe_unknown;
+  $("dl_enabled").checked = !!cfg.download.enabled;
+  $("split_by_family").checked = (cfg.split_by_family === null || cfg.split_by_family === undefined) ? true : !!cfg.split_by_family;
+  $("dl_top_n").value = cfg.download.top_n;
+  $("dl_rounds").value = cfg.download.rounds;
+  $("dl_window").value = cfg.download.window_sec;
+  $("dl_min").value = cfg.download.min_speed_kbps;
+  $("dl_url").value = cfg.download.url || "";
+  $("ip_file").value = cfg.ip_file;
+  $("latency_cap").value = (cfg.latency_cap ?? 20000);
+  $("test_url").value = cfg.test_url;
+  $("ipv6").checked = !!cfg.ipv6;
+  $("ipv6_file").value = cfg.ipv6_file || "ipv6.txt";
+  $("v6_per_cidr").value = (cfg.v6_per_cidr ?? 6);
+  $("test_all").checked = !!cfg.test_all;
+  $("password").value = "";
+  $("password").placeholder = cfg.password_set ? "已设置，留空不改" : "不修改";
+  // 定时任务
+  $("interval_minutes").value = (cfg.interval_minutes ?? 0);
+  $("run_on_start").value = cfg.run_on_start ? "1" : "0";
+  // 守护配置
+  const g = cfg.guard || {};
+  $("gw_interval").value = g.interval_sec || 60;
+  const fo = g.failover;
+  $("gw_failover").value = (fo === null || fo === undefined) ? "1" : (fo ? "1" : "0");
+  syncDlFields();
+  refreshMode();
+  refreshEstimate();
+}
+
+function collect(){
+  const body = {
+    mode: document.querySelector("#modeSeg button.on").dataset.mode,
+    port: +$("port").value, routines: +$("routines").value,
+    latency_rounds: +$("latency_rounds").value,
+    fast_fail: +$("fast_fail").value || 0,
+    round_gap_ms: +$("round_gap_ms").value,
+    warmup_discard: $("warmup_discard").checked,
+    max_delay: +$("max_delay").value, max_loss: +$("max_loss").value,
+    cfcolo: $("cfcolo").value.trim(),
+    region_probe_unknown: $("region_probe_unknown").checked,
+    ip_file: $("ip_file").value.trim(), latency_cap: +$("latency_cap").value || 0,
+    test_url: $("test_url").value.trim(),
+    ipv6: $("ipv6").checked, test_all: $("test_all").checked,
+    ipv6_file: $("ipv6_file").value.trim() || "ipv6.txt",
+    v6_per_cidr: +$("v6_per_cidr").value || 6,
+    split_by_family: $("split_by_family").checked,
+    interval_minutes: +$("interval_minutes").value || 0,
+    run_on_start: $("run_on_start").value === "1",
+    guard: {
+      failover: $("gw_failover").value === "1",
+      interval_sec: Math.max(15, +$("gw_interval").value || 60)
+    },
+    download: {
+      enabled: $("dl_enabled").checked,
+      top_n: +$("dl_top_n").value, rounds: +$("dl_rounds").value,
+      window_sec: +$("dl_window").value, min_speed_kbps: +$("dl_min").value,
+      url: $("dl_url").value.trim()
+    }
+  };
+  const pwd = $("password").value;
+  if(pwd) body.password = pwd;
+  return body;
+}
+
+const MODE_HINT = {
+  ping: "TCP 建连多轮：每 IP 做 N 轮 TCP 握手，丢弃首轮后取均值与样本标准差。成本最低。",
+  tls: "TLS 握手多轮：每 IP 做 N 轮 TLS 握手（不发 HTTP 请求），取均值与样本标准差。有透明代理时唯一可靠。",
+  httping: "HTTPing 多轮：每 IP 做 N 轮 HEAD 请求（含 TLS 握手），取均值与样本标准差，另有 cf-colo 头顺带判定地区。"
+};
+function refreshMode(){
+  const mode = document.querySelector("#modeSeg button.on").dataset.mode;
+  const multi = true;
+  $("latency_rounds").disabled = !multi;
+  $("warmup_discard").disabled = !multi;
+  $("round_gap_ms").disabled = !multi;
+  $("fast_fail").disabled = !multi;
+  $("region_probe_unknown").disabled = false;
+  $("modeHint").textContent = MODE_HINT[mode] || "";
+  const sumChip = $("cfgSummaryChip");
+  if(sumChip){
+    const r = $("latency_rounds").value || 3;
+    sumChip.textContent = (mode === "ping" ? "TCP ping" : mode === "tls" ? "TLS 握手" : "HTTPing") + " · " + r + "轮";
+  }
+  updateEstimateLabels();
+}
+
+function syncDlFields(){
+  const on = $("dl_enabled").checked;
+  const el = $("dlFields");
+  if(el){
+    el.style.opacity = on ? "1" : "0.45";
+    el.style.pointerEvents = on ? "" : "none";
+  }
+}
+
+/* ---------- 预估 ---------- */
+function candidatesGuess(){
+  // 延迟探测上限：0 表示「用全部 IP 段」，此时按经验值 6000 估算
+  const cap = +$("latency_cap").value || 0;
+  return cap > 0 ? cap : 6000;
+}
+function refreshEstimate(){
+  updateEstimateLabels();
+  const n = candidatesGuess();
+  const mode = document.querySelector("#modeSeg button.on").dataset.mode;
+  const rounds = +$("latency_rounds").value || 1;
+  const warm = $("warmup_discard").checked ? 1 : 0;
+  const topN = +$("dl_top_n").value || 20;
+  const dlR = +$("dl_rounds").value || 1;
+  const win = +$("dl_window").value || 5;
+  const split = $("split_by_family").checked;
+  $("estProbe").textContent = "≈ " + (n * (rounds + warm)).toLocaleString() + " 次";
+  // httping 的 HEAD 既当延迟探测又顺带取 colo，地区过滤阶段可复用，不再额外计费
+  $("estGate").textContent = mode === "httping" ? "0（复用延迟结果）"
+                                                : ("≤ " + topN + " 次 HEAD");
+  $("estDl").textContent = $("dl_enabled").checked
+    ? (topN * dlR + " 轮 × " + win + "s" + (split ? "（v4/v6 各半）" : ""))
+    : "已关闭";
+  // httping 每轮是一次 HTTP 往返，耗时约 TCP 的 1.6 倍
+  const perProbe = mode === "httping" ? 0.55 : 0.35;
+  const t = n * (rounds + warm) * perProbe / Math.max(1, +$("routines").value)
+          + ($("dl_enabled").checked ? topN * dlR * (win + 1.2) : 0);
+  $("estTime").textContent = "≈ " + Math.max(1, Math.round(t)) + " 秒";
+}
+function updateEstimateLabels(){}
+
+/* ---------- 结果渲染 ---------- */
+function fmt(v, d){ return (v === null || v === undefined) ? "—" : v.toFixed(d); }
+function fmtInt(v){
+  if(!v) return "—";
+  if(v >= 1024*1024) return (v/1024/1024).toFixed(2) + " MB/s";
+  return v.toFixed(1) + " KB/s";
+}
+function sigma(v){ return (v === null || v === undefined) ? "—" : v.toFixed(1); }
+
+function isV6(ip){ return (ip || "").indexOf(":") >= 0; }
+
+/* 与后端 engine._speed_order 完全一致的排序键：
+   有速度的按速度降序在前，没速度的按延迟升序垫底 —— 保证「第一行就是带宽最大」。 */
+function speedOrder(r){
+  const sp = r.speed_kbps, dl = r.delay_ms;
+  const has = (sp !== null && sp !== undefined && sp > 0);
+  return [has ? 0 : 1, -(has ? sp : 0), (dl === null || dl === undefined) ? Infinity : dl];
+}
+function bestRow(rows){
+  if(!rows.length) return null;
+  return rows.slice().sort((a,b)=>{
+    const ka = speedOrder(a), kb = speedOrder(b);
+    return ka[0]-kb[0] || ka[1]-kb[1] || ka[2]-kb[2];
+  })[0];
+}
+
+function sortedRows(){
+  let rows = (STATE?.results || []).map((r,i)=>({...r, _i:i+1, _fam: isV6(r.ip) ? "v6" : "v4"}));
+  const k = SORT.k;
+  if(!k) return rows;
+  const val = (r) => {
+    if(k === "_dn") return r.delay_ok || 0;
+    if(k === "_sn") return r.speed_ok || 0;
+    if(k === "_tag") return r.speed_kbps ? 1 : 0;
+    if(k === "_fam") return r._fam;
+    const v = r[k];
+    return (v === null || v === undefined) ? -1 : v;
+  };
+  rows.sort((a,b)=>{
+    const va = val(a), vb = val(b);
+    if(typeof va === "string") return va.localeCompare(vb) * SORT.dir;
+    return (va - vb) * SORT.dir;
+  });
+  return rows;
+}
+
+function render(){
+  const rows = sortedRows();
+  const tb = document.querySelector("#tbl tbody");
+  const tbl = $("tbl"), empty = $("tblEmpty");
+  if(!rows.length){ tbl.style.display = "none"; empty.style.display = "block"; }
+  else { tbl.style.display = "table"; empty.style.display = "none"; }
+  const best = bestRow(rows);
+  const bestV4 = bestRow(rows.filter(r=>r._fam === "v4" && r.speed_kbps));
+  const bestV6 = bestRow(rows.filter(r=>r._fam === "v6" && r.speed_kbps));
+  $("winnerLine").textContent = best
+    ? ("写入 AdGuard 的最优 IP：" + best.ip + "（" + (best.colo || "---") + "）" +
+       (best.speed_kbps ? "　" + fmtInt(best.speed_kbps) : "　无测速数据，按延迟选"))
+    : "";
+  $("winnerLine").style.display = best ? "" : "none";
+  tb.innerHTML = rows.map((r,idx)=>{
+    const isBest = best && r.ip === best.ip && r.speed_kbps;
+    const isFamBest = !isBest && ((r._fam === "v4" && bestV4 && r.ip === bestV4.ip) ||
+                                  (r._fam === "v6" && bestV6 && r.ip === bestV6.ip));
+    let tag = "";
+    if(isBest) tag = '<span class="tag best">最优</span>';
+    else if(isFamBest) tag = '<span class="tag">本族最快</span>';
+    else if(r.delay_sigma !== null && r.delay_sigma < 10) tag = '<span class="tag">稳</span>';
+    return `<tr class="${isBest?"best":""}">
+      <td class="num">${r._i}</td>
+      <td class="ip">${r.ip}</td>
+      <td><span class="fam ${r._fam}">${r._fam}</span></td>
+      <td>${r.colo || "—"}</td>
+      <td class="num">${fmt(r.delay_ms,1)}<span class="muted"> ms</span></td>
+      <td class="num">${sigma(r.delay_sigma)}</td>
+      <td class="num">${r.delay_ok||0}/${r.delay_rounds||0}</td>
+      <td class="num">${fmtInt(r.speed_kbps)}</td>
+      <td class="num">${sigma(r.speed_sigma)}</td>
+      <td class="num">${r.speed_ok||0}/${r.speed_rounds||0}</td>
+      <td>${tag}</td>
+    </tr>`;
+  }).join("");
+  $("txt").textContent = rows.map(textLine).join("\n") || "—";
+}
+
+function textLine(r){
+  const ip = (r.ip||"").padEnd(15);
+  const colo = (r.colo||"---").slice(0,3).padEnd(3);
+  const delay = (r.delay_ms===null||r.delay_ms===undefined) ? "-" : r.delay_ms.toFixed(1)+"ms";
+  const dsig  = (r.delay_sigma===null||r.delay_sigma===undefined) ? "σ=-" : "σ="+r.delay_sigma.toFixed(1);
+  const dn = `(${r.delay_ok||0}/${r.delay_rounds||0})`.padEnd(6);
+  let stxt, sstxt;
+  if(r.speed_kbps===null||r.speed_kbps===undefined){
+    stxt = "-".padStart(10); sstxt = "σ=-";
+  } else {
+    stxt = (r.speed_kbps.toFixed(1)+" KB/s").padStart(10);
+    sstxt = (r.speed_sigma===null||r.speed_sigma===undefined) ? "σ=-" : "σ="+r.speed_sigma.toFixed(1);
+  }
+  const sn = `(${r.speed_ok||0}/${r.speed_rounds||0})`;
+  return `${ip} ${colo} ${delay.padStart(8)} ${dsig.padStart(8)} ${dn}  ${stxt} ${sstxt.padStart(8)} ${sn}`;
+}
+
+/* ---------- DNS 重写同步 ---------- */
+let DNS = {auto_sync:true, instances:[], domains:[], manual_rewrites:[]};
+
+function dnsRow(container, fields, onDel){
+  const div = document.createElement("div");
+  div.className = "dnsrow";
+  fields.forEach(f=>{
+    if(f.type === "cb"){
+      const l = document.createElement("label");
+      l.className = "cb"; l.style.margin = "0"; l.style.whiteSpace = "nowrap";
+      l.innerHTML = `<input type="checkbox" ${f.value?"checked":""}> <span style="font-size:12px">${f.ph}</span>`;
+      l.querySelector("input").addEventListener("change", ()=>{ f.value = l.querySelector("input").checked; });
+      div.appendChild(l);
+    } else {
+      const inp = document.createElement("input");
+      inp.type = f.pw ? "password" : "text";
+      inp.placeholder = f.ph;
+      inp.value = f.value || "";
+      inp.style.flex = f.flex || "1";
+      inp.addEventListener("input", ()=>{ f.value = inp.value; });
+      div.appendChild(inp);
+    }
+  });
+  const x = document.createElement("button");
+  x.className = "x"; x.textContent = "✕"; x.title = "删除";
+  x.onclick = ()=>{ div.remove(); onDel && onDel(); };
+  div.appendChild(x);
+  container.appendChild(div);
+  return div;
+}
+
+function renderDns(){
+  $("dns_auto").checked = !!DNS.auto_sync;
+  // 实例
+  const ib = $("dnsInsts"); ib.innerHTML = "";
+  (DNS.instances||[]).forEach((it, i)=>{
+    dnsRow(ib, [
+      {ph:"名称", value:it.name, flex:"0 0 90px"},
+      {ph:"http://192.168.1.2:3000", value:it.url},
+      {ph:"用户名", value:it.username, flex:"0 0 110px"},
+      {ph:"密码", value:it.password, pw:true, flex:"0 0 110px"},
+    ], ()=>{ DNS.instances.splice(i,1); renderDns(); })
+      .querySelectorAll("input").forEach((inp, k)=>{
+        inp.addEventListener("input", ()=>{
+          const vals = ["name","url","username","password"];
+          DNS.instances[i][vals[k]] = inp.value;
+        });
+      });
+  });
+  // 域名
+  const db = $("dnsDomains"); db.innerHTML = "";
+  (DNS.domains||[]).forEach((d, i)=>{
+    const f = {value:d.wildcard};
+    dnsRow(db, [
+      {ph:"example.com", value:d.domain},
+      {type:"cb", ph:"含子域(*.)", value:d.wildcard},
+    ], ()=>{ DNS.domains.splice(i,1); renderDns(); })
+      .querySelectorAll("input").forEach(inp=>{
+        inp.addEventListener("input", ()=>{
+          if(inp.type === "checkbox") DNS.domains[i].wildcard = inp.checked;
+          else DNS.domains[i].domain = inp.value;
+        });
+        if(inp.type === "checkbox") inp.addEventListener("change", ()=>{
+          DNS.domains[i].wildcard = inp.checked;
+        });
+      });
+  });
+  // 手动重写
+  const mb = $("dnsManual"); mb.innerHTML = "";
+  (DNS.manual_rewrites||[]).forEach((m, i)=>{
+    dnsRow(mb, [
+      {ph:"域名 nas.home", value:m.domain},
+      {ph:"解析目标 IP", value:m.answer},
+    ], ()=>{ DNS.manual_rewrites.splice(i,1); renderDns(); })
+      .querySelectorAll("input[type=text]").forEach((inp, k)=>{
+        inp.addEventListener("input", ()=>{
+          DNS.manual_rewrites[i][k === 0 ? "domain" : "answer"] = inp.value;
+        });
+      });
+  });
+  renderDnsStat();
+}
+
+function renderDnsStat(){
+  const st = STATE?.dns_state;
+  const el = $("dnsStat");
+  if(!st || !st.last_sync){ el.style.display = "none"; return; }
+  const rows = Object.entries(st.instances || {}).map(([name, r])=>{
+    if(!r.ok) return `<div><span class="bad">✘ ${name}</span>：${r.error}</div>`;
+    let line = `<div><span class="ok">✔ ${name}</span>：写入 ${r.stats.written} 条，清理 ${r.stats.removed} 条`;
+    // drift：同步后对账发现的残留差异（正常应为空）
+    const dr = r.drift || [];
+    if(dr.length){
+      line += `　<span class="bad">残留 ${dr.length} 处差异</span>`;
+    }
+    line += "</div>";
+    if(dr.length){
+      const items = dr.slice(0, 8).map(d=>{
+        const want = d.want ? `应为 ${d.want}` : "应无记录";
+        const now  = d.now ? `现为 ${d.now}` : "现无记录";
+        return `<div class="muted" style="padding-left:22px;font-size:12px">· <code>${d.domain}</code>　${want}，${now}</div>`;
+      }).join("");
+      const more = dr.length > 8 ? `<div class="muted" style="padding-left:22px;font-size:12px">… 另有 ${dr.length-8} 处</div>` : "";
+      line += items + more;
+    }
+    return line;
+  }).join("");
+  el.innerHTML = `<div>上次${st.auto ? "自动" : "手动"}同步：<b>${st.last_ip}</b> @ ${st.last_sync}</div>${rows || "<div class='muted'>无实例</div>"}`;
+  el.style.display = "";
+}
+
+/* ---------- 定时任务状态 ---------- */
+function renderSched(){
+  const s = STATE?.sched;
+  const chip = $("schedChip");
+  if(!s || !s.enabled){
+    if(chip){ chip.textContent = "已关闭"; chip.className = "chip"; }
+    $("sLast").textContent = s?.last_run_at || "—";
+    $("sNext").textContent = "—";
+    return;
+  }
+  if(chip){ chip.textContent = "每 " + s.interval_minutes + " 分钟"; chip.className = "chip ok"; }
+  $("sLast").textContent = s.last_run_at || "尚未触发";
+  $("sNext").textContent = s.next_run_at || "—";
+}
+
+async function loadDns(){
+  try{
+    const d = await api("/api/dns");
+    DNS = d.dns; STATE.dns_state = d.dns_state;
+    renderDns();
+  }catch(e){ /* 静默 */ }
+}
+
+$("dns_auto").addEventListener("change", ()=>{ DNS.auto_sync = $("dns_auto").checked; });
+$("dnsAddInst").onclick = ()=>{
+  DNS.instances.push({name:"", url:"", username:"", password:""});
+  renderDns();
+};
+$("dnsAddDom").onclick = ()=>{
+  DNS.domains.push({domain:"", wildcard:true});
+  renderDns();
+};
+$("dnsAddManual").onclick = ()=>{
+  DNS.manual_rewrites.push({domain:"", answer:""});
+  renderDns();
+};
+$("dnsSave").onclick = async ()=>{
+  const btn = $("dnsSave");
+  const orig = btn.textContent;
+  try{
+    const d = await api("/api/dns/save", {method:"POST", body: JSON.stringify({dns: DNS})});
+    DNS = d.dns; renderDns();
+    toast("✓ DNS 配置已保存", btn);
+    btn.textContent = "已保存 ✓";
+    btn.style.color = "var(--ok)";
+    btn.style.borderColor = "var(--ok)";
+    setTimeout(()=>{
+      btn.textContent = orig;
+      btn.style.color = "";
+      btn.style.borderColor = "";
+    }, 1500);
+  }catch(e){ toast(e.message, btn); }
+};
+$("dnsSyncNow").onclick = async ()=>{
+  const btn = $("dnsSyncNow");
+  try{
+    const d = await api("/api/dns/sync", {method:"POST", body: "{}"});
+    STATE.dns_state = d.dns_state; renderDnsStat();
+    toast("✓ 已写入：" + d.ip, btn);
+  }catch(e){ toast(e.message, btn); }
+};
+$("dnsView").onclick = async ()=>{
+  const validInsts = (DNS.instances||[]).filter(i=>(i.url||"").trim());
+  if(!validInsts.length) return toast("还没有配置任何 DNS 实例");
+  const box = $("rwBox"), pre = $("rwPre"), btn = $("dnsView");
+  // 若已展开，再次点击则收起
+  if(box.style.display === "block"){
+    box.style.display = "none";
+    btn.textContent = "查看实例重写表";
+    return;
+  }
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "查询中…";
+  try{
+    const blocks = [];
+    for(const inst of validInsts){
+      const q = "url=" + encodeURIComponent(inst.url);
+      try{
+        const d = await api("/api/dns/rewrites?" + q);
+        const name = inst.name ? `[${inst.name}] ` : "";
+        const title = `=== ${name}${inst.url} (共 ${d.rewrites.length} 条重写记录) ===`;
+        const list = d.rewrites.length
+          ? d.rewrites.map(r=>`${r.enabled ? "✔" : "✘"} ${r.domain.padEnd(28)} → ${r.answer}`).join("\n")
+          : "（该实例当前没有任何重写记录）";
+        blocks.push(title + "\n" + list);
+      }catch(err){
+        blocks.push(`=== [${inst.name || inst.url}] 查询失败 ===\n错误：${err.message}`);
+      }
+    }
+    pre.textContent = blocks.join("\n\n");
+    box.style.display = "block";
+    btn.textContent = "收起实例重写表";
+  }catch(e){ toast(e.message); }
+  finally{
+    btn.disabled = false;
+    if(box.style.display !== "block") btn.textContent = origText;
+  }
+};
+
+/* ---------- 轮询 ---------- */
+function chip(text, cls){ const c = $("statusChip"); c.textContent = text; c.className = "chip " + (cls||""); }
+
+function renderGuard(g){
+  if(!g || !g.watch_ip){
+    $("guardChip").textContent = "待运行"; $("guardChip").className = "chip";
+    $("gIp").textContent = "—"; $("gRtt").textContent = "—";
+    $("gFails").textContent = "—"; $("gNext").textContent = "—";
+    $("gText").textContent = "还没有可守护的 IP：先跑一次测速，守护会自动盯住当前写入 DNS 的那个 IP。";
+    return;
+  }
+  const ok = g.ok;
+  $("guardChip").textContent = ok === true ? "正常" : ok === false ? "异常" : "等待首检";
+  $("guardChip").className = "chip " + (ok === true ? "ok" : ok === false ? "err" : "");
+  $("gIp").textContent = g.watch_ip;
+  $("gRtt").textContent = (g.rtt_ms != null) ? g.rtt_ms.toFixed(1) + " ms" : "—";
+  $("gFails").textContent = (g.fails || 0) + " 次";
+  $("gNext").textContent = g.next_check || "—";
+  const parts = [];
+  parts.push("累计检查 " + (g.checks||0) + " 次，失败 " + (g.fail_total||0) + " 次");
+  if(g.last_check) parts.push("最近检查 " + g.last_check);
+  if(g.last_ok) parts.push("最近正常 " + g.last_ok);
+  if(g.last_error) parts.push("最近错误：" + g.last_error);
+  if(g.rerun_count) parts.push("已自动重测 " + g.rerun_count + " 次（最近 " + (g.last_rerun||"—") + "）");
+  const h = (g.history||[]).slice(-20);
+  if(h.length){
+    const okN = h.filter(x=>x.ok).length;
+    parts.push("最近 " + h.length + " 次：" + "▇".repeat(0) + h.map(x=>x.ok?"●":"×").join("") + "（" + okN + "/" + h.length + " 正常）");
+  }
+  $("gText").textContent = parts.join(" · ");
+}
+
+async function poll(){
+  try{
+    const st = await api("/api/state");
+    STATE = st;
+    const p = st.progress || {};
+    const pct = p.total ? Math.min(100, p.done / p.total * 100) : (st.running ? 12 : 0);
+    $("bar").style.width = pct + "%";
+    $("pLabel").textContent = [p.label || "空闲", p.detail || ""].filter(Boolean).join(" · ");
+    $("pCount").textContent = p.total ? (p.done + " / " + p.total) : "";
+    $("logs").textContent = (st.log||[]).join("\n") || "（暂无日志）";
+    $("logs").scrollTop = $("logs").scrollHeight;
+    $("btnRun").disabled = st.running;
+    $("btnRun").textContent = st.running ? "运行中…" : "开始测速";
+    $("btnCancel").style.display = st.running ? "" : "none";
+    const nc = st.netcheck || {};
+    if(nc.hijacked){
+      $("netBanner").style.display = "";
+      $("netBannerText").innerHTML =
+        "向 RFC5737 文档测试网段（" + (nc.dead_reachable || []).join(" / ") +
+        "）建连竟然「秒连成功」，说明 SYN 在本地就被应答了。<b>此时 ping 模式的延迟全是噪声（都在 1ms 以内），无法反映节点好坏。</b>" +
+        "请把模式切到 <b>TLS 握手</b>（握手必须真正到达对端）或 HTTPing。";
+    } else {
+      $("netBanner").style.display = "none";
+    }
+    const v6 = st.ipv6_info || {};
+    $("v6Banner").style.background = "#fff3e0";
+    $("v6Banner").style.borderColor = "#ffcc80";
+    $("v6Banner").style.color = "#e65100";
+    if($("ipv6").checked && v6.checked && !v6.ok){
+      $("v6Banner").style.display = "";
+      $("v6Banner").innerHTML = "<b>⛔ IPv6 出口不可用</b><div style=\"margin-top:4px\">"
+        + (v6.reason || "探测 IPv6 地址全部失败") + "</div>";
+    } else if($("ipv6").checked && v6.checked && v6.ok){
+      $("v6Banner").style.display = "";
+      $("v6Banner").style.background = "#e8f5e9";
+      $("v6Banner").style.borderColor = "#a5d6a7";
+      $("v6Banner").style.color = "#1b5e20";
+      $("v6Banner").innerHTML = "<b>✓ IPv6 出口可用</b>"
+        + "<div style=\"margin-top:4px\">探测目标 " + (v6.target || v6.local || "-")
+        + (v6.ms ? "　建连 " + v6.ms.toFixed(0) + " ms" : "") + "</div>";
+    } else {
+      $("v6Banner").style.display = "none";
+    }
+    if(st.error) chip("出错：" + st.error, "err");
+    else if(st.running) chip("运行中", "run");
+    else if(st.finished_at) chip("上次完成 " + st.finished_at);
+    else chip("空闲");
+    renderGuard(st.guard);
+    renderSched();
+    renderDnsStat();
+    render();
+  }catch(e){ /* 401 已由 api() 弹登录框，这些是瞬时网络错误 */ }
+}
+
+/* ---------- 事件 ---------- */
+document.querySelectorAll("#modeSeg button").forEach(b=>{
+  b.onclick = ()=>{ document.querySelectorAll("#modeSeg button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); refreshMode(); refreshEstimate(); };
+});
+document.querySelectorAll(".tabs button").forEach(b=>{
+  b.onclick = ()=>{ document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); TAB = b.dataset.tab;
+    $("paneTable").style.display = TAB === "table" ? "" : "none";
+    $("paneText").style.display = TAB === "text" ? "" : "none"; };
+});
+document.querySelectorAll("#tbl th").forEach(th=>{
+  th.onclick = ()=>{
+    const k = th.dataset.k;
+    SORT = {k, dir: (SORT.k === k && SORT.dir === -1) ? 1 : -1};
+    if(k === "ip" || k === "colo" || k === "_fam") SORT.dir = (SORT.dir === 1 ? 1 : 1);
+    render();
+  };
+});
+["latency_rounds","round_gap_ms","routines","dl_top_n","dl_rounds","dl_window","warmup_discard","dl_enabled","test_all","ipv6","latency_cap","fast_fail","v6_per_cidr","split_by_family"]
+  .forEach(id => { const el = $(id); if(el) el.addEventListener("change", refreshEstimate); });
+
+$("btnRun").onclick = async ()=>{
+  const btn = $("btnRun");
+  try{
+    await api("/api/run", {method:"POST", body: JSON.stringify(collect())});
+    toast("🚀 测速已开始", btn); poll();
+  }catch(e){ toast(e.message, btn); }
+};
+$("btnCancel").onclick = async ()=>{
+  const btn = $("btnCancel");
+  try{ await api("/api/cancel", {method:"POST"}); toast("已请求取消", btn); }catch(e){ toast(e.message, btn);}
+};
+$("btnSave").onclick = async ()=>{
+  const btn = $("btnSave");
+  const orig = btn.textContent;
+  try{
+    await api("/api/config", {method:"POST", body: JSON.stringify(collect())});
+    toast("✓ 配置已保存", btn);
+    btn.textContent = "已保存 ✓";
+    btn.style.color = "var(--ok)";
+    btn.style.borderColor = "var(--ok)";
+    setTimeout(()=>{
+      btn.textContent = orig;
+      btn.style.color = "";
+      btn.style.borderColor = "";
+    }, 1500);
+  }catch(e){ toast("保存失败：" + e.message, btn); }
+};
+$("btnCopy").onclick = async ()=>{
+  const btn = $("btnCopy");
+  const txt = $("txt").textContent;
+  try{ await navigator.clipboard.writeText(txt); toast("✓ 已复制到剪贴板", btn); }catch(e){ toast("复制失败，请手动选择", btn); }
+};
+$("btnCsv").onclick = ()=> window.open(resolvePath("/api/export?fmt=csv"), "_blank");
+
+$("btnGuardProbe").onclick = async ()=>{
+  const b = $("btnGuardProbe"); b.disabled = true; b.textContent = "探测中…";
+  try{
+    const r = await api("/api/guard/probe");
+    toast(r.ok ? `正常 ${r.rtt_ms}ms` + (r.colo ? ` · ${r.colo}` : "") : `不可达：${r.error || "无响应"}`, b);
+    poll();
+  }catch(e){ toast(e.message, b); }
+  finally{ b.disabled = false; b.textContent = "立即探测"; }
+};
+
+$("dl_enabled").addEventListener("change", syncDlFields);
+
+function initCfgNav(){
+  const nav = $("cfgNav");
+  if(!nav) return;
+  const btns = nav.querySelectorAll("button");
+  const groups = document.querySelectorAll(".cfg-group");
+  const applyCat = (cat)=>{
+    btns.forEach(b=>b.classList.toggle("on", b.dataset.cat === cat));
+    groups.forEach(g=>{
+      if(cat === "all") g.classList.remove("hide");
+      else g.classList.toggle("hide", g.dataset.cat !== cat);
+    });
+    try{ localStorage.setItem("cfip_cfg_cat", cat); }catch(e){}
+  };
+  btns.forEach(b=>{
+    b.onclick = ()=> applyCat(b.dataset.cat);
+  });
+  const saved = (()=>{ try{ return localStorage.getItem("cfip_cfg_cat"); }catch(e){ return null; } })() || "source";
+  applyCat(saved);
+}
+
+(async function init(){
+  $("loginBtn").onclick = doLogin;
+  $("loginPwd").addEventListener("keydown", e=>{ if(e.key === "Enter") doLogin(); });
+  initCfgNav();
+  await boot();
+})();
+
+async function boot(){
+  try{
+    // 先问一下要不要登录：要登录且未登录就直接弹框，省掉一轮必然 401 的请求
+    const st = await api("/api/auth");
+    if(st.required && !st.authed){ showLogin(""); return; }
+  }catch(e){ /* 老版本后端没有 /api/auth，忽略 */ }
+  try{
+    const d = await api("/api/config");
+    CFG = d.config; COLO = d.colos || [];
+    $("coloChips").innerHTML = COLO.map(([c,n])=>`<button data-c="${c}" title="${n}">${c}</button>`).join("");
+    document.querySelectorAll("#coloChips button").forEach(b=>{
+      b.onclick = ()=>{
+        const set = new Set(($("cfcolo").value||"").split(",").map(s=>s.trim().toUpperCase()).filter(Boolean));
+        const c = b.dataset.c;
+        if(set.has(c)) set.delete(c); else set.add(c);
+        $("cfcolo").value = [...set].join(",");
+        syncChips();
+      };
+    });
+    fillForm(CFG); syncChips();
+  }catch(e){
+    if(LOGIN_SHOWN) return;   // 401 已经弹框了，别再叠一层 toast
+    toast("读取配置失败：" + e.message);
+  }
+  await poll();
+  await loadDns();
+  if(!boot._timer) boot._timer = setInterval(poll, 900);
+}
+
+function syncChips(){
+  const set = new Set(($("cfcolo").value||"").split(",").map(s=>s.trim().toUpperCase()).filter(Boolean));
+  document.querySelectorAll("#coloChips button").forEach(b=>{
+    b.classList.toggle("on", set.has(b.dataset.c));
+  });
+}
+$("cfcolo").addEventListener("input", ()=>{ syncChips(); refreshEstimate(); });
+</script>
+</body>
+</html>

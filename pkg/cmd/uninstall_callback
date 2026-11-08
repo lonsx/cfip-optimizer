@@ -1,0 +1,22 @@
+#!/bin/bash
+# cfip-opt 卸载回调：按用户在卸载向导里的选择决定是否删除 @appdata 数据。
+#
+# fnOS 卸载默认保留 var(@appdata)，因为里面存着：
+#   · config.json      —— AdGuard 地址、口令、域名清单（删了要重新配）
+#   · last_result.json —— 上一轮测速结果（守护轮换要靠它挑备选）
+#   · colo_ip_db.json  —— 学到的地区库（删了要重新补探几十分钟）
+# 所以只有用户明确选「删除所有数据」时才清理。
+#
+# 环境变量：
+#   wizard_keep_data —— 来自 wizard/uninstall 的 radio 字段，值 keep | remove
+#   TRIM_PKGVAR      —— 应用运行时数据目录（/volX/@appdata/cfip-opt）
+
+KEEP="${wizard_keep_data:-keep}"
+
+if [ "$KEEP" = "remove" ]; then
+  if [ -n "${TRIM_PKGVAR:-}" ] && [ -d "$TRIM_PKGVAR" ]; then
+    rm -rf "${TRIM_PKGVAR:?}/"* 2>/dev/null
+  fi
+fi
+
+exit 0

@@ -1,0 +1,18 @@
+{
+  ".url": {
+    "cfip-opt.Application": {
+      "title": "CF IP 优选",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/cfip-opt",
+      "gatewaySocket": "cfip-opt.sock",
+      "url": "/app/cfip-opt/",
+      "allUsers": true,
+      "control": {
+        "showRoute": 1,
+        "auth": 1
+      }
+    }
+  }
+}

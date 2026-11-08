@@ -1,0 +1,13 @@
+appname               = cfip-opt
+version               = 1.1.2
+display_name          = CF IP 优选
+desc                  = 在 Cloudflare 全部 IP 段中多轮测速（延迟均值 + 标准差、下载多轮取均值），找出当前网络响应最快的边缘节点，测速完成后自动写入局域网内 AdGuard Home 实例的 DNS 重写表，全屋设备无需任何配置即可享受最优加速线路。<br><br>【特性】<br>· 全平台支持：同时内置 x86_64 与 aarch64 纯静态原生二进制，自动跨平台适配<br>· 统一网关：原生接入飞牛 Unified Gateway（无独立端口、无 Docker），单静态 Go 二进制直连 Unix 套接字<br>· 多轮统计：延迟 / 下载均可多轮，自动计算均值与标准差，可丢弃首轮 warm-up，并识别丢包与抖动<br>· 先筛后测：地区过滤前置，跳过无关网段再测延迟，一轮下来省掉大半时间<br>· 三种模式：TCP ping / TLS 握手（抗透明代理劫持）/ HTTPing 多轮（走 CDN 真实路径）<br>· 名额对半：IPv4 / IPv6 各占一半下载测速名额，单族不足时余量自动让给另一族<br>· DNS 同步：多 AdGuard 实例整表接管，支持通配域名、手动重写并存，同步后自动对账残留<br>· 定时与守护：可按分钟定时测速，当前 IP 掉线自动秒级轮换到备选<br>· 测速源：默认 Cloudflare 官方 speed.cloudflare.com，不消耗自建 Worker 额度
+source                = thirdparty
+platform              = all
+os_min_version        = 1.1.8
+desktop_uidir         = ui
+desktop_applaunchname = cfip-opt.Application
+checkport             = false
+ctl_stop              = true
+disable_authorization_path = true
+changelog             = 1.1.2：全新重绘高质感应用图标（Cloudflare 活力橙 + 3D 立体白云 + 能量跃动闪电），完美适配飞牛桌面与应用中心规范。
