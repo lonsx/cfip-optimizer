@@ -587,8 +587,10 @@ func (a *App) guardLoop() {
 		now := time.Now().Format("2006-01-02 15:04:05")
 		var fails int
 		var prevRerun int64
+		var wasFailing bool
 		a.mu.Lock()
 		gs := &a.Guard
+		wasFailing = gs.Fails > 0
 		gs.WatchIP = ip
 		gs.Checks++
 		gs.LastCheck = now
@@ -627,17 +629,32 @@ func (a *App) guardLoop() {
 		a.mu.Unlock()
 
 		if ok {
-			a.log(fmt.Sprintf("守护：%s 正常 %.0fms", ip, rtt))
-		} else {
-			shown := fails
-			if shown > g.FailThreshold {
-				shown = g.FailThreshold
+			if wasFailing {
+				a.log(fmt.Sprintf("守护：%s 快速复核通过，节点已恢复正常（%.0fms）", ip, rtt))
+			} else {
+				a.log(fmt.Sprintf("守护：%s 正常 %.0fms", ip, rtt))
 			}
-			a.log(fmt.Sprintf("守护：%s 探测失败（%d/%d）%s", ip, shown, g.FailThreshold, errMsg))
 		}
 
-		// 连续失败达到阈值 → 先试备选轮换，备选也不可用才重测
+		// 失败快速复核机制：未达连续阈值前，不等完整大周期，固定 15 秒后快速复核一次
+		retryDelay := 15 * time.Second
+		if time.Duration(interval)*time.Second < retryDelay {
+			retryDelay = time.Duration(interval) * time.Second
+		}
+
+		if !ok && fails < g.FailThreshold {
+			a.log(fmt.Sprintf("守护：%s 首次探测超时（%d/%d，%d秒后快速复核）%s",
+				ip, fails, g.FailThreshold, int(retryDelay.Seconds()), errMsg))
+			a.mu.Lock()
+			a.Guard.NextCheck = time.Now().Add(retryDelay).Format("15:04:05")
+			a.mu.Unlock()
+			sleepOrStop(a.guardStop, retryDelay)
+			continue
+		}
+
+		// 连续失败达到阈值 → 判定不可达，先试备选轮换，备选也不可用才重测
 		if !ok && fails >= g.FailThreshold {
+			a.log(fmt.Sprintf("守护：%s 连续 %d 次探测失败，确认节点失效！", ip, fails))
 			cooldown := g.RerunCooldownS
 			if cooldown < 60 {
 				cooldown = 900

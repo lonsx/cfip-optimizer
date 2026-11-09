@@ -548,7 +548,7 @@
             </select></label>
         </div>
         <div class="hintline" style="margin-top:-4px">
-          默认 60 秒检查一次当前写入 DNS 的 IP。若觉得频繁，推荐设为 120 ~ 300 秒（2 ~ 5 分钟）。
+          日常按设定间隔巡检；遇单次探测超时，系统将在 15 秒后立即快速复核，连续异常即刻秒级切换备选 IP，兼顾平稳与灵敏。
         </div>
         <div class="hint" id="gText" style="font-size:12px;opacity:.75;line-height:1.7;margin-top:6px"></div>
       </section>
