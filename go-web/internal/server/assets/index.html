@@ -828,16 +828,21 @@ function openHistModal(h){
     <div>下载带宽：<b>${bestSpeed}</b></div>
   `;
 
-  const rows = h.results || [];
+  const rows = (h.results || []).map((r, idx) => ({
+    ...r,
+    _fam: r._fam || (isV6(r.ip) ? "v6" : "v4"),
+    _i: idx + 1
+  }));
   const best = bestRow(rows);
   const tb = document.querySelector("#mTbl tbody");
   tb.innerHTML = rows.map((r, idx)=>{
+    const fam = r._fam || (isV6(r.ip) ? "v6" : "v4");
     const isBest = best && r.ip === best.ip;
     let tag = isBest ? '<span class="tag best">最优</span>' : '';
     return `<tr class="${isBest ? 'best' : ''}">
       <td class="num">${idx + 1}</td>
       <td class="ip">${r.ip}</td>
-      <td><span class="fam ${r._fam}">${r._fam}</span></td>
+      <td><span class="fam ${fam}">${fam}</span></td>
       <td>${r.colo || "—"}</td>
       <td class="num">${fmt(r.delay_ms, 1)}<span class="muted"> ms</span></td>
       <td class="num">${sigma(r.delay_sigma)}</td>

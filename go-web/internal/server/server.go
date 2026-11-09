@@ -113,6 +113,7 @@ type App struct {
 
 	runner    *engine.Runner
 	guardStop chan struct{}
+	guardWake chan struct{}
 	guardOnce sync.Once
 
 	schedStop chan struct{}
@@ -142,6 +143,7 @@ func NewWithGate(dataDir, cidrs string) *App {
 		IPv6Info:  map[string]any{"ok": false, "reason": "", "checked": false},
 		DNSState:  DNSState{Instances: map[string]adguard.InstanceResult{}},
 		Guard:     GuardState{History: []GuardTick{}},
+		guardWake: make(chan struct{}, 1),
 		schedStop: make(chan struct{}),
 		sessions:  newSessionStore(),
 		gate:      ParseCIDRGate(cidrs),
@@ -442,7 +444,11 @@ func (a *App) doSync(cfg engine.Config, bestIP string, auto bool) {
 		Auto:      &autoFlag,
 		Instances: res,
 	}
+	// 立即联动守护目标：DNS 已成功写入新 IP，守护目标立即对齐并清零失败计数
+	a.Guard.WatchIP = bestIP
+	a.Guard.Fails = 0
 	a.mu.Unlock()
+	a.wakeGuard()
 }
 
 // BestIP 从结果里选要写入 DNS 的 IP：实测带宽最大的那一个。
@@ -547,6 +553,16 @@ func (a *App) pickFallback(exclude map[string]struct{}) *engine.Result {
 	return nil
 }
 
+func (a *App) wakeGuard() {
+	if a.guardWake == nil {
+		return
+	}
+	select {
+	case a.guardWake <- struct{}{}:
+	default:
+	}
+}
+
 func (a *App) startGuard() {
 	a.guardStop = make(chan struct{})
 	a.log("可达性守护已启动")
@@ -572,12 +588,16 @@ func (a *App) guardLoop() {
 		a.mu.Unlock()
 
 		if !g.Enabled {
-			sleepOrStop(a.guardStop, time.Duration(interval)*time.Second)
+			if !sleepOrStopOrWake(a.guardStop, a.guardWake, time.Duration(interval)*time.Second) {
+				return
+			}
 			continue
 		}
 		ip := a.watchIP()
 		if ip == "" {
-			sleepOrStop(a.guardStop, time.Duration(interval)*time.Second)
+			if !sleepOrStopOrWake(a.guardStop, a.guardWake, time.Duration(interval)*time.Second) {
+				return
+			}
 			continue
 		}
 
@@ -648,7 +668,9 @@ func (a *App) guardLoop() {
 			a.mu.Lock()
 			a.Guard.NextCheck = time.Now().Add(retryDelay).Format("15:04:05")
 			a.mu.Unlock()
-			sleepOrStop(a.guardStop, retryDelay)
+			if !sleepOrStopOrWake(a.guardStop, a.guardWake, retryDelay) {
+				return
+			}
 			continue
 		}
 
@@ -666,7 +688,9 @@ func (a *App) guardLoop() {
 			if g.FailoverEnabled() {
 				switched := a.tryFailover(cfg, ip, now)
 				if switched {
-					sleepOrStop(a.guardStop, time.Duration(interval)*time.Second)
+					if !sleepOrStopOrWake(a.guardStop, a.guardWake, time.Duration(interval)*time.Second) {
+						return
+					}
 					continue
 				}
 			}
@@ -702,7 +726,9 @@ func (a *App) guardLoop() {
 			}
 		}
 
-		sleepOrStop(a.guardStop, time.Duration(interval)*time.Second)
+		if !sleepOrStopOrWake(a.guardStop, a.guardWake, time.Duration(interval)*time.Second) {
+			return
+		}
 	}
 }
 
@@ -718,6 +744,19 @@ func sleepOrStop(stop chan struct{}, d time.Duration) {
 	select {
 	case <-stop:
 	case <-t.C:
+	}
+}
+
+func sleepOrStopOrWake(stop, wake chan struct{}, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-stop:
+		return false
+	case <-wake:
+		return true
+	case <-t.C:
+		return true
 	}
 }
 
@@ -919,6 +958,7 @@ func (a *App) handleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		out := toMap(cfg)
 		out["password"] = ""
+		a.wakeGuard()
 		writeJSON(w, 200, map[string]any{"ok": true, "config": out})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
