@@ -200,10 +200,16 @@ func ExpandCandidates(text string, testAll bool, capN int, v6PerCIDR int) []stri
 	}
 	nets := ParseCIDRText(text)
 
+	var v4Nets, v6Nets []*CIDR
 	var v6Fine [][2]*big.Int
 	for _, c := range nets {
-		if c.V6 && c.Bits > V6HugePrefix {
-			v6Fine = append(v6Fine, [2]*big.Int{c.Start, c.End})
+		if c.V6 {
+			v6Nets = append(v6Nets, c)
+			if c.Bits > V6HugePrefix {
+				v6Fine = append(v6Fine, [2]*big.Int{c.Start, c.End})
+			}
+		} else {
+			v4Nets = append(v4Nets, c)
 		}
 	}
 	inFine := func(v *big.Int) bool {
@@ -215,23 +221,24 @@ func ExpandCandidates(text string, testAll bool, capN int, v6PerCIDR int) []stri
 		return false
 	}
 
-	out := make([]string, 0, 1024)
-	seen := make(map[string]struct{}, 1024)
-	push := func(s string) bool {
-		if _, dup := seen[s]; !dup {
-			seen[s] = struct{}{}
-			out = append(out, s)
+	expandV4 := func(targetCap int) []string {
+		if targetCap <= 0 || len(v4Nets) == 0 {
+			return nil
 		}
-		return len(out) >= capN
-	}
+		out := make([]string, 0, targetCap)
+		seen := make(map[string]struct{}, targetCap)
+		push := func(s string) bool {
+			if _, dup := seen[s]; !dup {
+				seen[s] = struct{}{}
+				out = append(out, s)
+			}
+			return len(out) >= targetCap
+		}
 
-	for _, c := range nets {
-		if !c.V6 {
-			// IPv4：按 /24 切块
+		for _, c := range v4Nets {
 			blocks := c.blocks24()
 			for _, b := range blocks {
 				if testAll {
-					// 枚举主机地址（跳过网络号与广播地址，/31、/32 除外）
 					cnt := new(big.Int).Set(b.Span)
 					lo := new(big.Int).Set(b.Start)
 					hi := new(big.Int).Add(b.Start, new(big.Int).Sub(b.Span, big.NewInt(1)))
@@ -254,42 +261,87 @@ func ExpandCandidates(text string, testAll bool, capN int, v6PerCIDR int) []stri
 					return out
 				}
 			}
-			continue
+		}
+		return out
+	}
+
+	expandV6 := func(targetCap int) []string {
+		if targetCap <= 0 || len(v6Nets) == 0 {
+			return nil
+		}
+		out := make([]string, 0, targetCap)
+		seen := make(map[string]struct{}, targetCap)
+		push := func(s string) bool {
+			if _, dup := seen[s]; !dup {
+				seen[s] = struct{}{}
+				out = append(out, s)
+			}
+			return len(out) >= targetCap
 		}
 
 		want := v6PerCIDR
 		if want < 1 {
 			want = 1
 		}
-		if c.Bits <= V6HugePrefix && len(v6Fine) > 0 {
-			// 聚合段：只从没被 /48 覆盖的区域取，且每段少取一些
-			want = want / 3
-			if want < 1 {
-				want = 1
+		for _, c := range v6Nets {
+			w := want
+			if c.Bits <= V6HugePrefix && len(v6Fine) > 0 {
+				w = w / 3
+				if w < 1 {
+					w = 1
+				}
+				got := 0
+				for try := 0; try < w*40 && got < w; try++ {
+					off := randBig(c.Span)
+					v := new(big.Int).Add(c.Start, off)
+					if inFine(v) {
+						continue
+					}
+					got++
+					if push(bigToIP(v, true).String()) {
+						return out
+					}
+				}
+				continue
 			}
-			got := 0
-			for try := 0; try < want*40 && got < want; try++ {
+			for i := 0; i < w; i++ {
 				off := randBig(c.Span)
 				v := new(big.Int).Add(c.Start, off)
-				if inFine(v) {
-					continue
-				}
-				got++
 				if push(bigToIP(v, true).String()) {
 					return out
 				}
 			}
-			continue
 		}
-		for i := 0; i < want; i++ {
-			// 按实际主机位宽取随机数：前缀短于 /64 时用固定 64 位会把样本挤进同一小片
-			off := randBig(c.Span)
-			v := new(big.Int).Add(c.Start, off)
-			if push(bigToIP(v, true).String()) {
-				return out
-			}
+		return out
+	}
+
+	// 仅有一族时直接展开
+	if len(v4Nets) == 0 {
+		return expandV6(capN)
+	}
+	if len(v6Nets) == 0 {
+		return expandV4(capN)
+	}
+
+	// 两族并存：按名额对半分分别展开，避免单族（尤其 testAll 模式下的巨量 IPv4）把总名额全部吃光
+	cap6 := capN / 2
+	out6 := expandV6(cap6)
+
+	// v6 展开不足 half 时的余量自动让渡给 v4
+	cap4 := capN - len(out6)
+	out4 := expandV4(cap4)
+
+	// 若 v4 展开后仍有名额且 v6 还有余力，二次补充
+	if left := capN - len(out4) - len(out6); left > 0 && len(out6) == cap6 {
+		extra6 := expandV6(cap6 + left)
+		if len(extra6) > len(out6) {
+			out6 = extra6
 		}
 	}
+
+	out := make([]string, 0, len(out4)+len(out6))
+	out = append(out, out4...)
+	out = append(out, out6...)
 	return out
 }
 
