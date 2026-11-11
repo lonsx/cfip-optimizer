@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -524,19 +523,13 @@ func (a *App) watchIP() string {
 	return BestIP(rows)
 }
 
-// pickFallback 从上一轮结果里挑一个「不是 dead」且排序最靠前的 IP 作为替补。
-//
-// 为什么要备选轮换：守护发现当前 IP 挂了就整轮重测，代价是几分钟。
-// 而上一轮测速的结果里往往还有 10 个以上可用 IP，直接切过去只要 100ms。
-// 只有备选也全部探测失败时，才值得花几分钟重测。
-//
-// 排序口径与写 DNS 时的「最优」一致（带宽优先），保证切过去的是次优解而不是随便一个。
+// pickFallback 从上一轮结果里挑一个「不是 dead」的最优备选 IP。
 func (a *App) pickFallback(exclude map[string]struct{}) *engine.Result {
 	a.mu.Lock()
 	rows := append([]*engine.Result{}, a.Results...)
 	a.mu.Unlock()
 
-	sort.SliceStable(rows, func(i, j int) bool { return engine.SpeedOrder(rows[i], rows[j]) })
+	cands := make([]*engine.Result, 0, len(rows))
 	for _, r := range rows {
 		if r == nil || r.IP == "" {
 			continue
@@ -548,9 +541,12 @@ func (a *App) pickFallback(exclude map[string]struct{}) *engine.Result {
 		if r.DelayMS == nil {
 			continue
 		}
-		return r
+		cands = append(cands, r)
 	}
-	return nil
+	if len(cands) == 0 {
+		return nil
+	}
+	return engine.Best(cands)
 }
 
 func (a *App) wakeGuard() {

@@ -616,18 +616,115 @@ func SortBySpeed(rows []*Result) {
 	sort.SliceStable(rows, func(i, j int) bool { return SpeedOrder(rows[i], rows[j]) })
 }
 
-// Best 按「实测带宽最大」挑出最优一行；全部无速度数据时退化为延迟最低。
+// 最优 IP 选取规则常量
+const (
+	MinStabilitySpeedKBps = 5 * 1024.0 // 5 MB/s 门槛 (5120 KB/s)
+	MaxSpeedStepGapKBps   = 2 * 1024.0 // 相邻最大速度差距 (2048 KB/s)
+	MaxSpeedTotalSpanKBps = 4 * 1024.0 // 梯队与最高速的最大累计差距 (4096 KB/s，选项 B 保护)
+)
+
+// Best 选取最优 IP：
+// 规则：平均速度 >= 5 MB/s 的结果中，按速度降序排列；
+// 相邻两两速度差距 <= 2 MB/s 且与第一名总差距 <= 4 MB/s 的高速连续梯队中，
+// 以下载速度方差（SpeedSigma）最小为最优。
+// 若未达到 5 MB/s 门槛或无速度数据，回退到传统策略（实测带宽最大，无带宽看延迟最低）。
 func Best(rows []*Result) *Result {
-	var best *Result
+	if len(rows) == 0 {
+		return nil
+	}
+	valid := make([]*Result, 0, len(rows))
 	for _, r := range rows {
-		if r == nil || r.IP == "" {
-			continue
+		if r != nil && r.IP != "" {
+			valid = append(valid, r)
 		}
-		if best == nil || SpeedOrder(r, best) {
-			best = r
+	}
+	if len(valid) == 0 {
+		return nil
+	}
+	SortBySpeed(valid) // valid[0] 为传统最大速度最优节点
+
+	top := valid[0]
+	// 检查最高速是否达到 5 MB/s 门槛
+	if top.SpeedKBps == nil || *top.SpeedKBps < MinStabilitySpeedKBps {
+		return top
+	}
+
+	// 构建相邻相连且累计差距 <= 4 MB/s 的连续高速梯队
+	vTop := *top.SpeedKBps
+	cluster := []*Result{top}
+	for i := 1; i < len(valid); i++ {
+		curr := valid[i]
+		if curr.SpeedKBps == nil || *curr.SpeedKBps < MinStabilitySpeedKBps {
+			break
+		}
+		prev := valid[i-1]
+		stepDiff := *prev.SpeedKBps - *curr.SpeedKBps
+		if stepDiff > MaxSpeedStepGapKBps {
+			// 相邻速度差距超过 2 MB/s，出现断层，链条截断
+			break
+		}
+		totalDiff := vTop - *curr.SpeedKBps
+		if totalDiff > MaxSpeedTotalSpanKBps {
+			// 累计落后超过 4 MB/s（选项 B 保护），链条截断
+			break
+		}
+		cluster = append(cluster, curr)
+	}
+
+	if len(cluster) == 1 {
+		return top
+	}
+
+	// 在梯队内部以下载速度方差（SpeedSigma）最小为最优
+	best := cluster[0]
+	for i := 1; i < len(cluster); i++ {
+		c := cluster[i]
+		if stabilityOrder(c, best) {
+			best = c
 		}
 	}
 	return best
+}
+
+// stabilityOrder 判断 a 是否在下载速度稳定性上优于 b
+func stabilityOrder(a, b *Result) bool {
+	hasA := a.SpeedSigma != nil
+	hasB := b.SpeedSigma != nil
+	if hasA && hasB {
+		diff := *a.SpeedSigma - *b.SpeedSigma
+		if math.Abs(diff) > 0.001 {
+			return *a.SpeedSigma < *b.SpeedSigma // SpeedSigma 越小越优
+		}
+	} else if hasA != hasB {
+		return hasA
+	}
+
+	// SpeedSigma 相同或都无时，速度更高者优先
+	sa := 0.0
+	sb := 0.0
+	if a.SpeedKBps != nil {
+		sa = *a.SpeedKBps
+	}
+	if b.SpeedKBps != nil {
+		sb = *b.SpeedKBps
+	}
+	if math.Abs(sa-sb) > 0.1 {
+		return sa > sb
+	}
+
+	// 速度仍相同，延迟更低者优先
+	da := math.Inf(1)
+	db := math.Inf(1)
+	if a.DelayMS != nil {
+		da = *a.DelayMS
+	}
+	if b.DelayMS != nil {
+		db = *b.DelayMS
+	}
+	if da != db {
+		return da < db
+	}
+	return a.IP < b.IP
 }
 
 // F 把 float64 取地址，便于构造 *float64 字段。

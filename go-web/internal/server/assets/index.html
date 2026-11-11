@@ -838,7 +838,7 @@ function openHistModal(h){
   tb.innerHTML = rows.map((r, idx)=>{
     const fam = r._fam || (isV6(r.ip) ? "v6" : "v4");
     const isBest = best && r.ip === best.ip;
-    let tag = isBest ? '<span class="tag best">最优</span>' : '';
+    let tag = isBest ? (best._stabilityPick ? '<span class="tag best">稳定最优</span>' : '<span class="tag best">最优</span>') : '';
     return `<tr class="${isBest ? 'best' : ''}">
       <td class="num">${idx + 1}</td>
       <td class="ip">${r.ip}</td>
@@ -1131,12 +1131,73 @@ function speedOrder(r){
   const has = (sp !== null && sp !== undefined && sp > 0);
   return [has ? 0 : 1, -(has ? sp : 0), (dl === null || dl === undefined) ? Infinity : dl];
 }
+const MIN_STABILITY_SPEED = 5 * 1024; // 5 MB/s
+const MAX_SPEED_STEP_GAP = 2 * 1024;  // 相邻最大差距 2 MB/s
+const MAX_SPEED_TOTAL_SPAN = 4 * 1024;// 梯队累计最大差距 4 MB/s (选项 B)
+
+/* 与后端 engine.Best 完全一致的选取规则：
+   平均速度 >= 5 MB/s 的结果中，按速度降序排列；
+   相邻两两速度差距 <= 2 MB/s 且与第一名总差距 <= 4 MB/s 的高速连续梯队中，
+   以下载速度方差（speed_sigma）最小为最优。 */
 function bestRow(rows){
-  if(!rows.length) return null;
-  return rows.slice().sort((a,b)=>{
+  if(!rows || !rows.length) return null;
+  const valid = rows.filter(r => r && r.ip);
+  if(!valid.length) return null;
+
+  valid.sort((a,b)=>{
     const ka = speedOrder(a), kb = speedOrder(b);
     return ka[0]-kb[0] || ka[1]-kb[1] || ka[2]-kb[2];
-  })[0];
+  });
+
+  const top = valid[0];
+  if(!top.speed_kbps || top.speed_kbps < MIN_STABILITY_SPEED){
+    return top;
+  }
+
+  const vTop = top.speed_kbps;
+  const cluster = [top];
+  for(let i = 1; i < valid.length; i++){
+    const curr = valid[i];
+    if(!curr.speed_kbps || curr.speed_kbps < MIN_STABILITY_SPEED) break;
+    const prev = valid[i-1];
+    const stepDiff = prev.speed_kbps - curr.speed_kbps;
+    if(stepDiff > MAX_SPEED_STEP_GAP) break; // 出现断层，截断
+    const totalDiff = vTop - curr.speed_kbps;
+    if(totalDiff > MAX_SPEED_TOTAL_SPAN) break; // 累计差距过大（选项 B 保护）
+    cluster.push(curr);
+  }
+
+  if(cluster.length === 1) return top;
+
+  let best = cluster[0];
+  for(let i = 1; i < cluster.length; i++){
+    const c = cluster[i];
+    const hasC = c.speed_sigma !== null && c.speed_sigma !== undefined;
+    const hasB = best.speed_sigma !== null && best.speed_sigma !== undefined;
+    if(hasC && hasB){
+      if(Math.abs(c.speed_sigma - best.speed_sigma) > 0.001){
+        if(c.speed_sigma < best.speed_sigma) best = c;
+        continue;
+      }
+    } else if(hasC && !hasB){
+      best = c;
+      continue;
+    } else if(!hasC && hasB){
+      continue;
+    }
+
+    if(Math.abs((c.speed_kbps||0) - (best.speed_kbps||0)) > 0.1){
+      if((c.speed_kbps||0) > (best.speed_kbps||0)) best = c;
+      continue;
+    }
+    if((c.delay_ms||Infinity) < (best.delay_ms||Infinity)){
+      best = c;
+    }
+  }
+  if(best !== top){
+    best._stabilityPick = true;
+  }
+  return best;
 }
 
 function sortedRows(){
@@ -1168,9 +1229,10 @@ function render(){
   const best = bestRow(rows);
   const bestV4 = bestRow(rows.filter(r=>r._fam === "v4" && r.speed_kbps));
   const bestV6 = bestRow(rows.filter(r=>r._fam === "v6" && r.speed_kbps));
+  const isStab = best && best._stabilityPick;
   $("winnerLine").textContent = best
     ? ("写入 AdGuard 的最优 IP：" + best.ip + "（" + (best.colo || "---") + "）" +
-       (best.speed_kbps ? "　" + fmtInt(best.speed_kbps) : "　无测速数据，按延迟选"))
+       (best.speed_kbps ? "　" + fmtInt(best.speed_kbps) + (isStab ? "（σ=" + sigma(best.speed_sigma) + " 稳定最优）" : "") : "　无测速数据，按延迟选"))
     : "";
   $("winnerLine").style.display = best ? "" : "none";
   tb.innerHTML = rows.map((r,idx)=>{
@@ -1178,7 +1240,7 @@ function render(){
     const isFamBest = !isBest && ((r._fam === "v4" && bestV4 && r.ip === bestV4.ip) ||
                                   (r._fam === "v6" && bestV6 && r.ip === bestV6.ip));
     let tag = "";
-    if(isBest) tag = '<span class="tag best">最优</span>';
+    if(isBest) tag = isStab ? '<span class="tag best">稳定最优</span>' : '<span class="tag best">最优</span>';
     else if(isFamBest) tag = '<span class="tag">本族最快</span>';
     else if(r.delay_sigma !== null && r.delay_sigma < 10) tag = '<span class="tag">稳</span>';
     return `<tr class="${isBest?"best":""}">
