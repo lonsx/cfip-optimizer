@@ -58,6 +58,7 @@ type DNSInstance struct {
 type DNSDomain struct {
 	Domain   string `json:"domain"`
 	Wildcard bool   `json:"wildcard"`
+	Exclude  string `json:"exclude,omitempty"` // 排除子域列表（逗号分隔，如 "hbbs,api"）
 }
 
 // ManualRewrite 手动重写条目（与最优 IP 重写并存）。

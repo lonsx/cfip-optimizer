@@ -243,11 +243,45 @@ func (c *Client) ReplaceRewrites(want map[string]map[string]struct{}) (Stats, er
 	return stats, nil
 }
 
+// ParseExcludes 解析排除子域列表。
+// 支持用户输入 "hbbs"、"hbbs.lonsx.com" 或逗号/分号/空格分隔的多个子域。
+func ParseExcludes(spec, base string) []string {
+	spec = strings.TrimSpace(spec)
+	base = strings.ToLower(strings.Trim(strings.TrimSpace(base), "."))
+	if spec == "" || base == "" {
+		return nil
+	}
+	fields := strings.FieldsFunc(spec, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\t'
+	})
+	seen := make(map[string]struct{}, len(fields))
+	var out []string
+	for _, f := range fields {
+		f = strings.ToLower(strings.Trim(f, "*. "))
+		if f == "" || f == base {
+			continue
+		}
+		var full string
+		if strings.HasSuffix(f, "."+base) {
+			full = f
+		} else {
+			full = f + "." + base
+		}
+		if _, ok := seen[full]; !ok {
+			seen[full] = struct{}{}
+			out = append(out, full)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // BuildWant 构造期望重写集合（与原应用 buildWant 一致）：
 //   - 每个域名写 bestIP；
 //   - wildcard 域名同时写「裸域名 + *.域名」两条；
 //   - 非 wildcard 域名把 *.域名 置为空集（收敛语义会清掉残留通配记录）；
-//   - manual 追加进去（与最优 IP 重写并存）。
+//   - 为配置的排除子域添加 A 和 AAAA 透传规则（answer 为 "A" 和 "AAAA"），让其走公网上游解析；
+//   - manual 追加进去（与最优 IP 重写并存，若 manual 指定了排除子域的真实 IP 则覆盖透传规则）。
 //
 // bestIP 为空时不产生最优 IP 记录，只保留手动重写。
 func BuildWant(domains []engine.DNSDomain, bestIP string, manual []engine.ManualRewrite) map[string]map[string]struct{} {
@@ -264,6 +298,14 @@ func BuildWant(domains []engine.DNSDomain, bestIP string, manual []engine.Manual
 			} else {
 				want["*."+name] = map[string]struct{}{}
 			}
+
+			// 排除子域：在 AdGuard Home 中添加 A / AAAA 透传规则，绕过泛解析
+			for _, sub := range ParseExcludes(d.Exclude, name) {
+				want[sub] = map[string]struct{}{
+					"A":    {},
+					"AAAA": {},
+				}
+			}
 		}
 	}
 	for _, m := range manual {
@@ -272,7 +314,19 @@ func BuildWant(domains []engine.DNSDomain, bestIP string, manual []engine.Manual
 		if dom == "" || ans == "" {
 			continue
 		}
-		if want[dom] == nil {
+		// 若 manual 显式指定了该子域的 IP/CNAME，覆盖掉自动生成的 A/AAAA 透传
+		if want[dom] != nil {
+			isAutoPass := true
+			for a := range want[dom] {
+				if a != "A" && a != "AAAA" {
+					isAutoPass = false
+					break
+				}
+			}
+			if isAutoPass {
+				want[dom] = make(map[string]struct{}, 1)
+			}
+		} else {
 			want[dom] = make(map[string]struct{}, 1)
 		}
 		want[dom][ans] = struct{}{}
